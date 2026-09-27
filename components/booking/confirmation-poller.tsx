@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
-import { getPaymentStatus } from "@/lib/services/payment-service";
+import { verifyPaymentWithPaystack } from "@/lib/services/payment-service";
 
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLL_MS = 30000;
@@ -15,11 +15,13 @@ interface ConfirmationPollerProps {
 }
 
 /**
- * Polls getPaymentStatus() every ~2s until the payment's DB status flips to
- * success/failed, or ~30s elapses with no resolution. Arrival at this page
- * (or a client-side redirect) is never itself proof of payment — only the
- * webhook-written DB row is, which is why this has to poll rather than just
- * trust the URL.
+ * Polls verifyPaymentWithPaystack() every ~2s until the payment's status
+ * flips to success/failed, or ~30s elapses with no resolution. Arrival at
+ * this page (or a client-side redirect) is never itself proof of payment.
+ * verifyPaymentWithPaystack() checks the DB first (the webhook may have
+ * already landed) and, if still pending, asks Paystack directly — a
+ * necessary fallback since the webhook can never reach a local dev server,
+ * and can be delayed in production too.
  */
 export function ConfirmationPoller({ reference }: ConfirmationPollerProps) {
   const [status, setStatus] = useState<PollStatus>("pending");
@@ -30,7 +32,7 @@ export function ConfirmationPoller({ reference }: ConfirmationPollerProps) {
     let timeoutId: ReturnType<typeof setTimeout>;
 
     async function poll() {
-      const result = await getPaymentStatus(reference);
+      const result = await verifyPaymentWithPaystack(reference);
 
       if (!active) return;
 

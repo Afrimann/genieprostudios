@@ -5,6 +5,7 @@ import { randomUUID } from "crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Booking, BookingStatus } from "@/lib/services/booking-service";
+import { confirmPaymentByReference } from "@/lib/services/payment-confirmation-service";
 
 // The three payment choices surfaced to the customer, per project-notes.md's
 // deposit model correction: "minimum" and "full" are only ever offered as
@@ -361,4 +362,91 @@ export async function getPaymentStatus(reference: string): Promise<PaymentStatus
   }
 
   return { status: data.status as PaymentStatusResult["status"] };
+}
+
+/**
+ * Pull-based fallback to the Paystack webhook, called from the confirmation
+ * page's poller. The webhook is Paystack pushing us charge.success — it can
+ * simply never arrive against a local dev server (no public URL for
+ * Paystack to reach), and can legitimately be delayed/dropped in production
+ * too. This instead asks Paystack directly ("did this reference succeed?"),
+ * which works from anywhere since it's an outbound call we make, then
+ * applies the exact same confirmPaymentByReference() transition the webhook
+ * uses — so whichever path wins the race, the result is identical.
+ *
+ * Ownership is checked via the RLS-scoped client BEFORE ever calling
+ * Paystack or the admin client: getPaymentStatus's own query already scopes
+ * to the authenticated customer's own payments (payments_select_own,
+ * 0010_rls_policies.sql), so if that lookup can't see this reference, this
+ * returns "not_found" without leaking whether the reference exists at all.
+ */
+export async function verifyPaymentWithPaystack(reference: string): Promise<PaymentStatusResult> {
+  const current = await getPaymentStatus(reference);
+
+  if (current.status !== "pending") {
+    // Already resolved (by the webhook, or a previous call to this
+    // function) — nothing left to reconcile.
+    return current;
+  }
+
+  const secret = process.env.PAYSTACK_SECRET_KEY;
+
+  if (!secret) {
+    console.error("verifyPaymentWithPaystack: PAYSTACK_SECRET_KEY is not configured");
+    return current;
+  }
+
+  let paystackResponse: Response;
+
+  try {
+    paystackResponse = await fetch(
+      `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+      { headers: { Authorization: `Bearer ${secret}` } },
+    );
+  } catch (err) {
+    console.error("verifyPaymentWithPaystack: could not reach Paystack", err);
+    return current;
+  }
+
+  let body: { status?: boolean; data?: { status?: string } };
+
+  try {
+    body = await paystackResponse.json();
+  } catch {
+    return current;
+  }
+
+  if (!paystackResponse.ok || body.status !== true || !body.data) {
+    // Includes "transaction not found" (customer bailed before ever
+    // reaching Paystack's checkout) — leave as pending, the poller's own
+    // timeout handles a session that never completes.
+    return current;
+  }
+
+  const paystackStatus = body.data.status;
+
+  if (paystackStatus === "success") {
+    const result = await confirmPaymentByReference(reference);
+
+    if (result.outcome === "applied" || result.outcome === "already_processed") {
+      return { status: "success" };
+    }
+
+    console.error("verifyPaymentWithPaystack: failed to apply confirmed payment", reference, result);
+    return current;
+  }
+
+  if (paystackStatus === "failed" || paystackStatus === "abandoned") {
+    const admin = createAdminClient();
+    await admin
+      .from("payments")
+      .update({ status: "failed" })
+      .eq("paystack_reference", reference)
+      .eq("status", "pending");
+
+    return { status: "failed" };
+  }
+
+  // Still pending on Paystack's side (e.g. "ongoing", "queued").
+  return current;
 }
