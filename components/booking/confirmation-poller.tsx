@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { CheckCircle2, XCircle } from "lucide-react";
 
 import { verifyPaymentWithPaystack } from "@/lib/services/payment-service";
+import { Button } from "@/components/ui/button";
 
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLL_MS = 30000;
@@ -25,6 +27,7 @@ interface ConfirmationPollerProps {
  */
 export function ConfirmationPoller({ reference }: ConfirmationPollerProps) {
   const [status, setStatus] = useState<PollStatus>("pending");
+  const [bookingId, setBookingId] = useState<string | null>(null);
   const elapsedRef = useRef(0);
 
   useEffect(() => {
@@ -35,6 +38,8 @@ export function ConfirmationPoller({ reference }: ConfirmationPollerProps) {
       const result = await verifyPaymentWithPaystack(reference);
 
       if (!active) return;
+
+      if (result.bookingId) setBookingId(result.bookingId);
 
       if (result.status === "success" || result.status === "failed") {
         setStatus(result.status);
@@ -61,26 +66,40 @@ export function ConfirmationPoller({ reference }: ConfirmationPollerProps) {
 
   if (status === "success") {
     return (
-      <div className="flex flex-col gap-2">
-        <p className="font-medium text-emerald-600">Payment confirmed — thank you!</p>
-        <Link href="/dashboard" className="text-sm underline underline-offset-2">
-          Go to your dashboard
-        </Link>
+      <div className="flex flex-col items-center gap-3 py-2 text-center">
+        <CheckCircle2 className="size-8 text-[var(--amber-glow)]" aria-hidden="true" />
+        <p className="font-medium text-foreground">Payment confirmed — thank you!</p>
+        <Button
+          asChild
+          className="h-10 rounded-full bg-[var(--amber-glow)] px-5 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
+        >
+          <Link href={bookingId ? `/dashboard/${bookingId}` : "/dashboard"}>View your booking</Link>
+        </Button>
       </div>
     );
   }
 
   if (status === "failed") {
     return (
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col items-center gap-3 py-2 text-center">
+        <XCircle className="size-8 text-destructive" aria-hidden="true" />
         <p className="font-medium text-destructive">This payment did not go through.</p>
-        <div className="flex gap-4 text-sm">
-          <Link href="/book" className="underline underline-offset-2">
-            Try again
-          </Link>
-          <Link href="/dashboard" className="underline underline-offset-2">
-            Go to your dashboard
-          </Link>
+        <p className="max-w-xs text-xs text-muted-foreground">
+          No charge was made{bookingId ? " and your time slot has been released" : ""}. You can
+          try again whenever you&apos;re ready.
+        </p>
+        <div className="flex gap-3">
+          <Button
+            asChild
+            className="h-10 rounded-full bg-[var(--amber-glow)] px-5 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
+          >
+            <Link href={bookingId ? `/dashboard/${bookingId}` : "/book"}>
+              {bookingId ? "Review and retry" : "Start a new booking"}
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="h-10 rounded-full px-5 text-sm font-medium">
+            <Link href="/dashboard">Dashboard</Link>
+          </Button>
         </div>
       </div>
     );
@@ -94,7 +113,10 @@ export function ConfirmationPoller({ reference }: ConfirmationPollerProps) {
           We&apos;ll keep confirming your payment in the background. Check your dashboard in a
           few minutes for the final status.
         </p>
-        <Link href="/dashboard" className="text-sm underline underline-offset-2">
+        <Link
+          href={bookingId ? `/dashboard/${bookingId}` : "/dashboard"}
+          className="text-sm underline underline-offset-2"
+        >
           Go to your dashboard
         </Link>
       </div>

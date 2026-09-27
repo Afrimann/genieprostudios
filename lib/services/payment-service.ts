@@ -337,23 +337,26 @@ export async function initializePayment(
 // is owned by the parallel backend correction pass — this only reads.
 export type PaymentStatusResult = {
   status: "pending" | "success" | "failed" | "not_found";
+  bookingId?: string;
 };
 
 /**
- * Looks up a single payment's status by its Paystack reference, scoped to
- * the authenticated customer via the RLS-scoped client (payments_select_own
- * policy, 0010_rls_policies.sql, joins through the payment's booking to
- * require booking.customer_id = auth.uid()) — a customer can never see a
- * payment on someone else's booking. Landing on this page is never itself
- * treated as proof of payment; only this DB read (ultimately written by the
- * Paystack webhook, not this page) counts.
+ * Looks up a single payment's status (and its booking id, so the
+ * confirmation page can link back to /dashboard/[bookingId] to retry or
+ * review) by its Paystack reference, scoped to the authenticated customer
+ * via the RLS-scoped client (payments_select_own policy,
+ * 0010_rls_policies.sql, joins through the payment's booking to require
+ * booking.customer_id = auth.uid()) — a customer can never see a payment on
+ * someone else's booking. Landing on this page is never itself treated as
+ * proof of payment; only this DB read (ultimately written by the Paystack
+ * webhook, not this page) counts.
  */
 export async function getPaymentStatus(reference: string): Promise<PaymentStatusResult> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("payments")
-    .select("status")
+    .select("status, booking_id")
     .eq("paystack_reference", reference)
     .maybeSingle();
 
@@ -361,7 +364,7 @@ export async function getPaymentStatus(reference: string): Promise<PaymentStatus
     return { status: "not_found" };
   }
 
-  return { status: data.status as PaymentStatusResult["status"] };
+  return { status: data.status as PaymentStatusResult["status"], bookingId: data.booking_id };
 }
 
 /**
@@ -429,7 +432,7 @@ export async function verifyPaymentWithPaystack(reference: string): Promise<Paym
     const result = await confirmPaymentByReference(reference);
 
     if (result.outcome === "applied" || result.outcome === "already_processed") {
-      return { status: "success" };
+      return { status: "success", bookingId: current.bookingId };
     }
 
     console.error("verifyPaymentWithPaystack: failed to apply confirmed payment", reference, result);
@@ -444,7 +447,24 @@ export async function verifyPaymentWithPaystack(reference: string): Promise<Paym
       .eq("paystack_reference", reference)
       .eq("status", "pending");
 
-    return { status: "failed" };
+    // "Only a verified deposit or full payment should be allowed to keep a
+    // booked time" — a confirmed-failed/abandoned attempt on a booking that
+    // has NEVER had a successful payment (still pending_deposit) must not
+    // keep holding that time slot. Cancel it immediately rather than
+    // waiting on the daily stale-pending sweep. Guarded by
+    // .eq("status", "pending_deposit") so this is a no-op (and never
+    // clobbers a legitimately deposited/paid booking) if, e.g., an earlier
+    // payment attempt on the same booking already succeeded and this failed
+    // attempt was a redundant retry.
+    if (current.bookingId) {
+      await admin
+        .from("bookings")
+        .update({ status: "cancelled" })
+        .eq("id", current.bookingId)
+        .eq("status", "pending_deposit");
+    }
+
+    return { status: "failed", bookingId: current.bookingId };
   }
 
   // Still pending on Paystack's side (e.g. "ongoing", "queued").

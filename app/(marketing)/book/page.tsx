@@ -21,17 +21,28 @@ export default function BookPage({
   searchParams: BookSearchParams;
 }) {
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Book a session</h1>
-        <p className="text-sm text-muted-foreground">
-          Pick a service, date, and time — we&apos;ll hold your slot as soon as you confirm.
-        </p>
-      </div>
+    <main className="flex flex-col">
+      <section className="border-b border-border bg-background">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-3 px-6 py-14">
+          <span className="text-xs font-medium tracking-[0.2em] text-[var(--amber-glow)] uppercase">
+            Book a session
+          </span>
+          <h1 className="font-heading text-3xl font-medium tracking-tight text-foreground sm:text-4xl">
+            Pick a package, a date, and a time
+          </h1>
+          <p className="max-w-xl text-sm text-muted-foreground">
+            We&apos;ll hold your slot as soon as you confirm.
+          </p>
+        </div>
+      </section>
 
-      <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
-        <BookPageContent searchParams={searchParams} />
-      </Suspense>
+      <section className="bg-background">
+        <div className="mx-auto w-full max-w-5xl px-6 py-10">
+          <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+            <BookPageContent searchParams={searchParams} />
+          </Suspense>
+        </div>
+      </section>
     </main>
   );
 }

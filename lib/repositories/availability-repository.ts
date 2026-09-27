@@ -206,7 +206,7 @@ export async function closeSlot(slotId: string): Promise<AvailabilitySlot | null
 
 export type SlotBookingRow = Pick<
   Booking,
-  "id" | "session_start_time" | "session_end_time" | "status"
+  "id" | "session_start_time" | "session_end_time" | "status" | "created_at"
 >;
 
 /**
@@ -229,7 +229,7 @@ export async function getBookingsForSlot(slotId: string): Promise<SlotBookingRow
 
   const { data, error } = await supabase
     .from("bookings")
-    .select("id, session_start_time, session_end_time, status")
+    .select("id, session_start_time, session_end_time, status, created_at")
     .eq("slot_id", slotId)
     .order("session_start_time", { ascending: true });
 
@@ -276,7 +276,7 @@ export async function getSlotsForDateWithBookings(date: string): Promise<SlotWit
 
   const { data, error } = await supabase
     .from("bookings")
-    .select("id, slot_id, session_start_time, session_end_time, status")
+    .select("id, slot_id, session_start_time, session_end_time, status, created_at")
     .in("slot_id", slotIds)
     .order("session_start_time", { ascending: true });
 
@@ -292,6 +292,7 @@ export async function getSlotsForDateWithBookings(date: string): Promise<SlotWit
       session_start_time: booking.session_start_time,
       session_end_time: booking.session_end_time,
       status: booking.status,
+      created_at: booking.created_at,
     };
 
     if (existing) {

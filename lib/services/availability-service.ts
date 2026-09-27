@@ -15,6 +15,14 @@ import { getServiceById } from "@/lib/repositories/service-repository";
 // for that window), not just booked ones.
 export const SLOT_BUFFER_MINUTES = 30;
 
+// How long a 'pending_deposit' booking (created but never paid) still
+// counts as occupying its time range, mirrored in
+// supabase/migrations/0018_pending_deposit_age_limit.sql's
+// v_pending_hold_minutes — must match. Only 'pending_deposit' ages out this
+// way; 'deposited'/'paid_in_full' always block regardless of age, since
+// real money has landed on them.
+export const PENDING_DEPOSIT_HOLD_MINUTES = 20;
+
 type TimeLike = string; // "HH:MM" or "HH:MM:SS"
 
 export type ProposedSlot = {
@@ -161,6 +169,7 @@ type MinimalBookingForOverlap = {
   session_start_time: string;
   session_end_time: string;
   status: string;
+  created_at: string;
 };
 
 /**
@@ -174,8 +183,11 @@ type MinimalBookingForOverlap = {
  * window.
  *
  * cancelled/auto_cancelled bookings are excluded from the overlap check
- * entirely (they no longer occupy real studio time), mirroring the same
- * exclusion in the RPC's SQL overlap predicate.
+ * entirely (they no longer occupy real studio time), and a pending_deposit
+ * booking stops counting once it's older than PENDING_DEPOSIT_HOLD_MINUTES
+ * (no successful payment ever landed on it in that time) — mirroring the
+ * same exclusions in the RPC's SQL overlap predicate
+ * (0018_pending_deposit_age_limit.sql).
  *
  * Takes plain data in/out (no Supabase calls) specifically so it can be
  * unit-tested without a database or mocks — same style as checkSlotBuffer.
@@ -194,9 +206,14 @@ export function computeValidStartTimes(
   }
 
   // Only bookings that still occupy real studio time can block a candidate.
-  const activeBookings = existingBookings.filter(
-    (booking) => booking.status !== "cancelled" && booking.status !== "auto_cancelled",
-  );
+  const pendingCutoff = Date.now() - PENDING_DEPOSIT_HOLD_MINUTES * 60_000;
+  const activeBookings = existingBookings.filter((booking) => {
+    if (booking.status === "cancelled" || booking.status === "auto_cancelled") return false;
+    if (booking.status === "pending_deposit") {
+      return new Date(booking.created_at).getTime() >= pendingCutoff;
+    }
+    return true;
+  });
 
   const options: StartTimeOption[] = [];
 

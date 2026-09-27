@@ -11,6 +11,7 @@ import {
   getOpenSlotsForDate,
   type AvailabilitySlot,
 } from "@/lib/repositories/availability-repository";
+import { cancelOwnPendingBooking } from "@/lib/repositories/booking-repository";
 import {
   createPendingBooking as createPendingBookingService,
   type CreatePendingBookingResult,
@@ -93,4 +94,36 @@ export async function createPendingBooking(
   startTime: string,
 ): Promise<CreatePendingBookingResult> {
   return createPendingBookingService(slotId, serviceId, startTime);
+}
+
+export type CancelBookingResult =
+  | { success: true }
+  | { success: false; message: string };
+
+/**
+ * Customer-facing "opt out of making this booking request" action — used
+ * both by the booking flow's own summary step and by the dashboard's
+ * pending-booking cards/detail page. Thin wrapper around
+ * cancelOwnPendingBooking (booking-repository.ts), which already enforces
+ * ownership + the pending_deposit-only guard; this layer just shapes the
+ * result and turns "already resolved, nothing to cancel" into a clear
+ * customer-facing message rather than a silent no-op.
+ */
+export async function cancelBooking(bookingId: string): Promise<CancelBookingResult> {
+  try {
+    const booking = await cancelOwnPendingBooking(bookingId);
+
+    if (!booking) {
+      return {
+        success: false,
+        message:
+          "This booking can no longer be cancelled here — it may already be paid, cancelled, or not yours.",
+      };
+    }
+
+    return { success: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to cancel this booking.";
+    return { success: false, message };
+  }
 }

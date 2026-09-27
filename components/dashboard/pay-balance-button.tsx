@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { initializePayment } from "@/lib/services/payment-service";
 import { formatKobo } from "@/lib/utils/money";
+import { useResetOnPageShow } from "@/lib/hooks/use-reset-on-pageshow";
 import { Button } from "@/components/ui/button";
 
 interface PayBalanceButtonProps {
@@ -20,6 +21,13 @@ interface PayBalanceButtonProps {
 export function PayBalanceButton({ bookingId, remainingKobo }: PayBalanceButtonProps) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Same bfcache fix as the booking flow's payment buttons — see
+  // lib/hooks/use-reset-on-pageshow.ts.
+  useResetOnPageShow(() => {
+    setSubmitting(false);
+    setError(null);
+  });
 
   async function handleClick() {
     setError(null);
