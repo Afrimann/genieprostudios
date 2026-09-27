@@ -1,0 +1,107 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+
+import { getPaymentStatus } from "@/lib/services/payment-service";
+
+const POLL_INTERVAL_MS = 2000;
+const MAX_POLL_MS = 30000;
+
+type PollStatus = "pending" | "success" | "failed" | "timed_out";
+
+interface ConfirmationPollerProps {
+  reference: string;
+}
+
+/**
+ * Polls getPaymentStatus() every ~2s until the payment's DB status flips to
+ * success/failed, or ~30s elapses with no resolution. Arrival at this page
+ * (or a client-side redirect) is never itself proof of payment — only the
+ * webhook-written DB row is, which is why this has to poll rather than just
+ * trust the URL.
+ */
+export function ConfirmationPoller({ reference }: ConfirmationPollerProps) {
+  const [status, setStatus] = useState<PollStatus>("pending");
+  const elapsedRef = useRef(0);
+
+  useEffect(() => {
+    let active = true;
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    async function poll() {
+      const result = await getPaymentStatus(reference);
+
+      if (!active) return;
+
+      if (result.status === "success" || result.status === "failed") {
+        setStatus(result.status);
+        return;
+      }
+
+      elapsedRef.current += POLL_INTERVAL_MS;
+
+      if (elapsedRef.current >= MAX_POLL_MS) {
+        setStatus("timed_out");
+        return;
+      }
+
+      timeoutId = setTimeout(poll, POLL_INTERVAL_MS);
+    }
+
+    timeoutId = setTimeout(poll, POLL_INTERVAL_MS);
+
+    return () => {
+      active = false;
+      clearTimeout(timeoutId);
+    };
+  }, [reference]);
+
+  if (status === "success") {
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="font-medium text-emerald-600">Payment confirmed — thank you!</p>
+        <Link href="/dashboard" className="text-sm underline underline-offset-2">
+          Go to your dashboard
+        </Link>
+      </div>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="font-medium text-destructive">This payment did not go through.</p>
+        <div className="flex gap-4 text-sm">
+          <Link href="/book" className="underline underline-offset-2">
+            Try again
+          </Link>
+          <Link href="/dashboard" className="underline underline-offset-2">
+            Go to your dashboard
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  if (status === "timed_out") {
+    return (
+      <div className="flex flex-col gap-2">
+        <p className="font-medium">Still processing — this can take a little longer.</p>
+        <p className="text-sm text-muted-foreground">
+          We&apos;ll keep confirming your payment in the background. Check your dashboard in a
+          few minutes for the final status.
+        </p>
+        <Link href="/dashboard" className="text-sm underline underline-offset-2">
+          Go to your dashboard
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm text-muted-foreground">Confirming your payment…</p>
+    </div>
+  );
+}

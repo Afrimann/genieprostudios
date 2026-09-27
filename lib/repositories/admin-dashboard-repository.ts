@@ -1,0 +1,308 @@
+import { createClient } from "@/lib/supabase/server";
+
+// Dumb data access for the admin dashboard home (app/admin/(protected)/page.tsx)
+// — a handful of independent counts/sums, each its own small query rather
+// than one large join, since they don't share a filter shape. Relies on RLS
+// (bookings_select_admin/payments_select_admin/portfolio_entries_select_admin,
+// 0010_rls_policies.sql; availability_slots' public-open-select policy
+// covers the open-windows count too) — no admin check of its own, same
+// convention as availability-repository.ts/admin-booking-repository.ts.
+export type AdminDashboardStats = {
+  openWindowsCount: number;
+  upcomingBookingsCount: number;
+  unresolvedCount: number;
+  revenueThisMonthKobo: number;
+  portfolioPublishedCount: number;
+  portfolioTotalCount: number;
+};
+
+function toIsoDate(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
+  const supabase = await createClient();
+  const todayIso = toIsoDate(new Date());
+  const monthStartIso = toIsoDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+
+  const [
+    openWindows,
+    upcomingBookings,
+    unresolved,
+    revenue,
+    portfolioPublished,
+    portfolioTotal,
+  ] = await Promise.all([
+    supabase
+      .from("availability_slots")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "open")
+      .gte("date", todayIso),
+    supabase
+      .from("bookings")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["deposited", "paid_in_full"])
+      .gte("session_date", todayIso),
+    supabase.rpc("bookings_unresolved_past_sessions"),
+    supabase
+      .from("payments")
+      .select("amount_kobo")
+      .eq("status", "success")
+      .gte("verified_at", `${monthStartIso}T00:00:00Z`),
+    supabase
+      .from("portfolio_entries")
+      .select("id", { count: "exact", head: true })
+      .eq("published", true),
+    supabase.from("portfolio_entries").select("id", { count: "exact", head: true }),
+  ]);
+
+  if (openWindows.error) {
+    throw new Error(`getAdminDashboardStats: openWindows: ${openWindows.error.message}`);
+  }
+  if (upcomingBookings.error) {
+    throw new Error(`getAdminDashboardStats: upcomingBookings: ${upcomingBookings.error.message}`);
+  }
+  if (unresolved.error) {
+    throw new Error(`getAdminDashboardStats: unresolved: ${unresolved.error.message}`);
+  }
+  if (revenue.error) {
+    throw new Error(`getAdminDashboardStats: revenue: ${revenue.error.message}`);
+  }
+  if (portfolioPublished.error) {
+    throw new Error(`getAdminDashboardStats: portfolioPublished: ${portfolioPublished.error.message}`);
+  }
+  if (portfolioTotal.error) {
+    throw new Error(`getAdminDashboardStats: portfolioTotal: ${portfolioTotal.error.message}`);
+  }
+
+  const revenueThisMonthKobo = (revenue.data ?? []).reduce(
+    (sum, row) => sum + (row.amount_kobo as number),
+    0,
+  );
+
+  return {
+    openWindowsCount: openWindows.count ?? 0,
+    upcomingBookingsCount: upcomingBookings.count ?? 0,
+    unresolvedCount: (unresolved.data ?? []).length,
+    revenueThisMonthKobo,
+    portfolioPublishedCount: portfolioPublished.count ?? 0,
+    portfolioTotalCount: portfolioTotal.count ?? 0,
+  };
+}
+
+/** Lightweight version of just the unresolved count, for the admin shell's sidebar badge — avoids the other 5 queries on every navigation. */
+export async function getUnresolvedCount(): Promise<number> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("bookings_unresolved_past_sessions");
+
+  if (error) {
+    throw new Error(`getUnresolvedCount: ${error.message}`);
+  }
+
+  return (data ?? []).length;
+}
+
+// ---------------------------------------------------------------------------
+// Revenue/payment detail for the dashboard's statistics section. All derived
+// from a single fetch of the payments ledger (status='success') rather than
+// several separate aggregate queries — PostgREST has no server-side GROUP
+// BY, so date-bucketing and type-splitting happen here in JS, same
+// "fetch rows, reduce client-side" convention already used for
+// revenueThisMonthKobo above and lib/services/reminder-service.ts. Fine at
+// this studio's booking volume; would need a real aggregate (RPC or
+// materialized view) if payment volume grows into the thousands/month.
+// ---------------------------------------------------------------------------
+
+export type RevenuePoint = { date: string; kobo: number };
+
+export type RevenueOverview = {
+  allTimeKobo: number;
+  thisMonthKobo: number;
+  lastMonthKobo: number;
+  depositKobo: number;
+  balanceKobo: number;
+  dailyLast14: RevenuePoint[];
+};
+
+const DAILY_CHART_DAYS = 14;
+
+export async function getRevenueOverview(): Promise<RevenueOverview> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("payments")
+    .select("amount_kobo, type, verified_at")
+    .eq("status", "success")
+    .not("verified_at", "is", null);
+
+  if (error) {
+    throw new Error(`getRevenueOverview: ${error.message}`);
+  }
+
+  const rows = data ?? [];
+  const now = new Date();
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  let allTimeKobo = 0;
+  let thisMonthKobo = 0;
+  let lastMonthKobo = 0;
+  let depositKobo = 0;
+  let balanceKobo = 0;
+
+  const dailyBuckets = new Map<string, number>();
+  for (let i = DAILY_CHART_DAYS - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(d.getDate() - i);
+    dailyBuckets.set(toIsoDate(d), 0);
+  }
+
+  for (const row of rows) {
+    const amount = row.amount_kobo as number;
+    const verifiedAt = new Date(row.verified_at as string);
+
+    allTimeKobo += amount;
+
+    if (verifiedAt >= thisMonthStart) {
+      thisMonthKobo += amount;
+    } else if (verifiedAt >= lastMonthStart && verifiedAt < thisMonthStart) {
+      lastMonthKobo += amount;
+    }
+
+    if (row.type === "deposit") {
+      depositKobo += amount;
+    } else {
+      balanceKobo += amount;
+    }
+
+    const bucketKey = toIsoDate(verifiedAt);
+    if (dailyBuckets.has(bucketKey)) {
+      dailyBuckets.set(bucketKey, (dailyBuckets.get(bucketKey) ?? 0) + amount);
+    }
+  }
+
+  return {
+    allTimeKobo,
+    thisMonthKobo,
+    lastMonthKobo,
+    depositKobo,
+    balanceKobo,
+    dailyLast14: Array.from(dailyBuckets.entries()).map(([date, kobo]) => ({ date, kobo })),
+  };
+}
+
+export type RecentPayment = {
+  id: string;
+  customerName: string | null;
+  serviceLabel: string;
+  amountKobo: number;
+  type: "deposit" | "balance";
+  verifiedAt: string;
+};
+
+/**
+ * Most recent successful payments, hydrated with customer/service names via
+ * the same batch-`in(...)` hydrate pattern as
+ * lib/repositories/reminder-repository.ts and admin-booking-repository.ts,
+ * rather than a triple-nested PostgREST select (payments -> bookings ->
+ * profiles/services) — keeps each query simple and independently testable.
+ */
+export async function getRecentPayments(limit: number): Promise<RecentPayment[]> {
+  const supabase = await createClient();
+
+  const { data: payments, error } = await supabase
+    .from("payments")
+    .select("id, booking_id, amount_kobo, type, verified_at")
+    .eq("status", "success")
+    .not("verified_at", "is", null)
+    .order("verified_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(`getRecentPayments: ${error.message}`);
+  }
+
+  const rows = payments ?? [];
+  if (rows.length === 0) {
+    return [];
+  }
+
+  const bookingIds = [...new Set(rows.map((r) => r.booking_id))];
+
+  const { data: bookings, error: bookingsError } = await supabase
+    .from("bookings")
+    .select("id, customer_id, service_id")
+    .in("id", bookingIds);
+
+  if (bookingsError) {
+    throw new Error(`getRecentPayments: bookings lookup failed: ${bookingsError.message}`);
+  }
+
+  const bookingById = new Map((bookings ?? []).map((b) => [b.id, b]));
+  const customerIds = [...new Set((bookings ?? []).map((b) => b.customer_id))];
+  const serviceIds = [...new Set((bookings ?? []).map((b) => b.service_id))];
+
+  const [{ data: profiles, error: profilesError }, { data: services, error: servicesError }] =
+    await Promise.all([
+      supabase.from("profiles").select("id, full_name").in("id", customerIds),
+      supabase.from("services").select("id, label").in("id", serviceIds),
+    ]);
+
+  if (profilesError) {
+    throw new Error(`getRecentPayments: profiles lookup failed: ${profilesError.message}`);
+  }
+  if (servicesError) {
+    throw new Error(`getRecentPayments: services lookup failed: ${servicesError.message}`);
+  }
+
+  const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
+  const serviceById = new Map((services ?? []).map((s) => [s.id, s]));
+
+  return rows.map((row) => {
+    const booking = bookingById.get(row.booking_id);
+    const profile = booking ? profileById.get(booking.customer_id) : undefined;
+    const service = booking ? serviceById.get(booking.service_id) : undefined;
+
+    return {
+      id: row.id,
+      customerName: profile?.full_name ?? null,
+      serviceLabel: service?.label ?? "Unknown service",
+      amountKobo: row.amount_kobo,
+      type: row.type,
+      verifiedAt: row.verified_at,
+    };
+  });
+}
+
+export type BookingStatusCounts = Record<
+  "pending_deposit" | "deposited" | "paid_in_full" | "auto_cancelled" | "cancelled",
+  number
+>;
+
+/** Counts every booking by status, in one query (status column only) rather than 5 separate `count`-only queries. */
+export async function getBookingStatusCounts(): Promise<BookingStatusCounts> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.from("bookings").select("status");
+
+  if (error) {
+    throw new Error(`getBookingStatusCounts: ${error.message}`);
+  }
+
+  const counts: BookingStatusCounts = {
+    pending_deposit: 0,
+    deposited: 0,
+    paid_in_full: 0,
+    auto_cancelled: 0,
+    cancelled: 0,
+  };
+
+  for (const row of data ?? []) {
+    counts[row.status as keyof BookingStatusCounts] += 1;
+  }
+
+  return counts;
+}
