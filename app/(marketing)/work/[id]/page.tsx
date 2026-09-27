@@ -1,3 +1,4 @@
+
 import { Suspense } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -11,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 // Dynamic route param + a Supabase read — both need the Suspense-wrap
 // treatment under cacheComponents (AGENTS.md fix #1), same as the /work
 // grid but with a param on top.
+export const instant = false;
 
 async function WorkDetailContent({ id }: { id: string }) {
   const entry = await getPortfolioEntryById(id);
@@ -91,7 +93,9 @@ function WorkDetailFallback() {
 
 export default async function WorkDetailPage({
   params,
-}: PageProps<"/work/[id]">) {
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const { id } = await params;
 
   return (
