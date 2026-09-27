@@ -1,23 +1,26 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Bricolage_Grotesque } from "next/font/google";
+import { Fraunces, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { Analytics } from "@vercel/analytics/next"
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+// "Tape Room" identity (2026-09-27, studio-color-scheme-v2 reference):
+// Fraunces (serif) carries both body copy and headings — no separate
+// display font, per the reference's editorial/film-not-screen direction.
+// Includes italic for emphasis accents (e.g. the hero's "the slow way").
+const fraunces = Fraunces({
+  variable: "--font-fraunces",
   subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  style: ["normal", "italic"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+// Space Mono replaces Geist Mono for the same role (nav labels, prices,
+// timestamps, uppercase-tracked kickers) — matches the reference's
+// tape-box/stamped-label mono treatment.
+const spaceMono = Space_Mono({
+  variable: "--font-space-mono",
   subsets: ["latin"],
-});
-
-// Distinctive display font for headlines only — Geist stays the body font
-// site-wide for consistency (see work-page-design-brief.md's type direction).
-const bricolage = Bricolage_Grotesque({
-  variable: "--font-display",
-  subsets: ["latin"],
+  weight: ["400", "700"],
 });
 
 export const metadata: Metadata = {
@@ -29,7 +32,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${bricolage.variable} h-full antialiased`}
+      className={`${fraunces.variable} ${spaceMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         {children}

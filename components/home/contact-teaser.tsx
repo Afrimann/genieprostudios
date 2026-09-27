@@ -1,5 +1,7 @@
 import Link from "next/link";
 
+import { Reveal } from "@/components/ui/reveal";
+
 // A bold two-way split rather than a form preview or map thumbnail — most
 // visitors here want one of exactly two things (book now, or ask a
 // question first), so the section states that choice plainly instead of
@@ -7,7 +9,7 @@ import Link from "next/link";
 export function ContactTeaser() {
   return (
     <section className="border-t border-border bg-background">
-      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 divide-y divide-border border border-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+      <Reveal className="mx-auto grid w-full max-w-6xl grid-cols-1 divide-y divide-border border border-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
         <Link
           href="/book"
           className="group flex flex-col justify-between gap-6 p-10 transition-colors hover:bg-card sm:p-14"
@@ -37,7 +39,7 @@ export function ContactTeaser() {
             Studio hours, location, and general enquiries →
           </span>
         </Link>
-      </div>
+      </Reveal>
     </section>
   );
 }

@@ -27,7 +27,7 @@ export async function BookingsIconLink() {
         <Link
           href="/dashboard"
           aria-label="View your bookings"
-          className="inline-flex size-9 items-center justify-center rounded-full text-foreground/80 transition-colors hover:bg-secondary hover:text-foreground"
+          className="inline-flex size-9 items-center justify-center rounded-none text-foreground/80 transition-colors hover:bg-secondary hover:text-foreground"
         >
           <CalendarCheck className="size-5" />
         </Link>

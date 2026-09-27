@@ -2,6 +2,8 @@
 
 import { motion } from "framer-motion";
 
+import { Reveal } from "@/components/ui/reveal";
+
 const MISSION_TEXT = "Every session leaves with a mix that's ready, not almost ready. — ";
 
 // Reads as an LED character display / tape-counter readout scrolling past —
@@ -12,10 +14,10 @@ export function MissionMarquee() {
 
   return (
     <section className="border-t border-border bg-card py-14">
-      <div
-        aria-hidden="false"
+      <Reveal
         className="overflow-hidden"
         role="text"
+        aria-hidden="false"
         aria-label={MISSION_TEXT.replace(" — ", "")}
       >
         <motion.p
@@ -26,7 +28,7 @@ export function MissionMarquee() {
           {repeated}
           {repeated}
         </motion.p>
-      </div>
+      </Reveal>
     </section>
   );
 }

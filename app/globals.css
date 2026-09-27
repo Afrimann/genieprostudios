@@ -7,9 +7,9 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-display);
+  --font-sans: var(--font-fraunces);
+  --font-mono: var(--font-space-mono);
+  --font-heading: var(--font-fraunces);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -48,50 +48,68 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* GenieProStudios "stereo vibe" identity — fixed dark, no light/dark toggle
-   (see work-page-design-brief.md: a control-room mood reads better as
-   deliberately dark than as something you can lighten). Near-black base +
-   warm amber accent (VU-meter/tube-amp glow) + warm off-white text, applied
-   through the same shadcn variable names so every existing component
-   (button, card, badge, etc.) picks up the theme with zero per-component
-   changes. */
+/* GenieProStudios "Tape Room" identity (2026-09-27, replaces the earlier
+   "stereo vibe" amber palette per the studio-color-scheme-v2 reference) —
+   fixed dark, no light/dark toggle. Warm near-black (not blue-black, reads
+   as film rather than screen) + burnt-orange accent (the one "live" color
+   on the page, standing in for a recording lamp) + a muted moss green used
+   sparingly for quiet "available/ready" signals, never competing with the
+   orange. Applied through the same shadcn variable names so every existing
+   component (button, card, badge, etc.) picks up the theme with zero
+   per-component changes. */
 :root {
-  --background: #0a0a0b;
-  --foreground: #f5f1ea;
-  --card: #141416;
-  --card-foreground: #f5f1ea;
-  --popover: #141416;
-  --popover-foreground: #f5f1ea;
-  --primary: #ff8a3d;
-  --primary-foreground: #140b04;
-  --secondary: #1f1f22;
-  --secondary-foreground: #f5f1ea;
-  --muted: #19191b;
-  --muted-foreground: #a8a29a;
-  --accent: #ff8a3d;
-  --accent-foreground: #140b04;
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: rgba(245, 241, 234, 0.12);
-  --input: rgba(245, 241, 234, 0.14);
-  --ring: #ff8a3d;
+  --background: #15110d;
+  --foreground: #efe6d0;
+  --card: #1d1812;
+  --card-foreground: #efe6d0;
+  --popover: #1d1812;
+  --popover-foreground: #efe6d0;
+  --primary: #c74a1f;
+  --primary-foreground: #15110d;
+  --secondary: #1d1812;
+  --secondary-foreground: #efe6d0;
+  --muted: #1d1812;
+  --muted-foreground: #b8ac93;
+  --accent: #c74a1f;
+  --accent-foreground: #15110d;
+  --destructive: #b3392f;
+  --border: #3a3128;
+  --input: #4a3d30;
+  --ring: #c74a1f;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: #141416;
-  --sidebar-foreground: #f5f1ea;
-  --sidebar-primary: #ff8a3d;
-  --sidebar-primary-foreground: #140b04;
-  --sidebar-accent: #1f1f22;
-  --sidebar-accent-foreground: #f5f1ea;
-  --sidebar-border: rgba(245, 241, 234, 0.12);
-  --sidebar-ring: #ff8a3d;
+  /* Square corners, hairline rules — per the reference, "nothing here is
+     trying to look soft." Every rounded-sm/md/lg/xl/2xl/3xl/4xl utility
+     site-wide derives from this single value via the @theme inline block
+     above, so 0 squares off every card/button/input/badge/dialog at once.
+     rounded-full (never part of this scale) is handled separately — see
+     the sitewide sweep replacing it with rounded-none. */
+  --radius: 0rem;
+  --sidebar: #1d1812;
+  --sidebar-foreground: #efe6d0;
+  --sidebar-primary: #c74a1f;
+  --sidebar-primary-foreground: #15110d;
+  --sidebar-accent: #1d1812;
+  --sidebar-accent-foreground: #efe6d0;
+  --sidebar-border: #3a3128;
+  --sidebar-ring: #c74a1f;
 
-  /* Studio-identity extras, not part of the shadcn set above. */
-  --amber-glow: #ff8a3d;
-  --amber-dim: #e8a33d;
+  /* Studio-identity extras, not part of the shadcn set above. Kept under
+     their original --amber-* names (now burnt-orange values) since ~38
+     files already reference them directly via arbitrary Tailwind values
+     (e.g. bg-[var(--amber-glow)]) — repointing the values here reskins the
+     whole site without touching every one of those files. */
+  --amber-glow: #c74a1f;
+  --amber-dim: #a83d19;
+  /* New: the reference's sparing secondary accent — quiet "available/
+     ready" signals (e.g. a positive number, an "open" state), never used
+     for primary CTAs. */
+  --moss: #536b5a;
+  --paper-faint: #7d7360;
+  --rule: #3a3128;
 }
 
 .dark {

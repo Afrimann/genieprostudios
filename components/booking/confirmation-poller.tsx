@@ -71,7 +71,7 @@ export function ConfirmationPoller({ reference }: ConfirmationPollerProps) {
         <p className="font-medium text-foreground">Payment confirmed — thank you!</p>
         <Button
           asChild
-          className="h-10 rounded-full bg-[var(--amber-glow)] px-5 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
+          className="h-10 rounded-none bg-[var(--amber-glow)] px-5 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
         >
           <Link href={bookingId ? `/dashboard/${bookingId}` : "/dashboard"}>View your booking</Link>
         </Button>
@@ -91,13 +91,13 @@ export function ConfirmationPoller({ reference }: ConfirmationPollerProps) {
         <div className="flex gap-3">
           <Button
             asChild
-            className="h-10 rounded-full bg-[var(--amber-glow)] px-5 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
+            className="h-10 rounded-none bg-[var(--amber-glow)] px-5 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
           >
             <Link href={bookingId ? `/dashboard/${bookingId}` : "/book"}>
               {bookingId ? "Review and retry" : "Start a new booking"}
             </Link>
           </Button>
-          <Button asChild variant="outline" className="h-10 rounded-full px-5 text-sm font-medium">
+          <Button asChild variant="outline" className="h-10 rounded-none px-5 text-sm font-medium">
             <Link href="/dashboard">Dashboard</Link>
           </Button>
         </div>

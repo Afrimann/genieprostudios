@@ -38,7 +38,7 @@ export default function ContactPage() {
             </p>
             <Button
               asChild
-              className="h-11 rounded-full bg-[var(--amber-glow)] px-6 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
+              className="h-11 rounded-none bg-[var(--amber-glow)] px-6 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
             >
               <Link href="/book">Book a session</Link>
             </Button>

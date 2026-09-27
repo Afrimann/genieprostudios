@@ -37,7 +37,7 @@ function Meter({ pattern }: { pattern: number[] }) {
         <span
           key={i}
           style={{ height }}
-          className="w-1.5 rounded-full bg-[var(--amber-glow)]/60"
+          className="w-1.5 rounded-none bg-[var(--amber-glow)]/60"
         />
       ))}
     </div>
@@ -164,7 +164,7 @@ async function RevenueSection() {
               {formatKobo(revenue.thisMonthKobo)}
             </p>
             <p
-              className={`text-[11px] ${monthDeltaKobo >= 0 ? "text-emerald-500" : "text-destructive"}`}
+              className={`text-[11px] ${monthDeltaKobo >= 0 ? "text-[var(--moss)]" : "text-destructive"}`}
             >
               {monthDeltaKobo >= 0 ? "+" : ""}
               {formatKobo(monthDeltaKobo)} vs last month
@@ -186,7 +186,7 @@ async function RevenueSection() {
           <span>Deposits ({formatKobo(revenue.depositKobo)})</span>
           <span>Balance payments ({formatKobo(revenue.balanceKobo)})</span>
         </div>
-        <div className="flex h-2 w-full overflow-hidden rounded-full bg-secondary">
+        <div className="flex h-2 w-full overflow-hidden rounded-none bg-secondary">
           <div
             style={{ width: `${depositPct}%` }}
             className="h-full bg-[var(--amber-glow)]"

@@ -165,7 +165,7 @@ export function PackageCard({ pkg, onSelect }: PackageCardProps) {
                 {feature.included ? (
                   <Check
                     className={`mt-0.5 size-4 shrink-0 ${
-                      feature.highlight ? "text-[var(--amber-glow)]" : "text-emerald-500"
+                      feature.highlight ? "text-[var(--amber-glow)]" : "text-[var(--moss)]"
                     }`}
                     aria-hidden="true"
                   />

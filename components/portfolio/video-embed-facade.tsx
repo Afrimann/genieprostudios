@@ -71,7 +71,7 @@ export function VideoEmbedFacade({
           type="button"
           onClick={() => setEmbedUrl(null)}
           aria-label="Stop video"
-          className="absolute top-3 right-3 flex size-8 items-center justify-center rounded-full bg-black/60 text-white transition-colors hover:bg-black/80"
+          className="absolute top-3 right-3 flex size-8 items-center justify-center rounded-none bg-black/60 text-white transition-colors hover:bg-black/80"
         >
           <X className="size-4" />
         </button>
@@ -113,7 +113,7 @@ export function VideoEmbedFacade({
       <div className="absolute inset-0 bg-black/30 transition-colors group-hover:bg-black/40" />
 
       <span className="absolute inset-0 flex items-center justify-center">
-        <span className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--amber-glow)] text-[var(--primary-foreground)] shadow-lg transition-transform group-hover:scale-110">
+        <span className="flex h-16 w-16 items-center justify-center rounded-none bg-[var(--amber-glow)] text-[var(--primary-foreground)] shadow-lg transition-transform group-hover:scale-110">
           <Play className="h-7 w-7 fill-current" />
         </span>
       </span>

@@ -1,5 +1,6 @@
 import { getPublishedPortfolioEntries } from "@/lib/repositories/portfolio-repository";
 import { VideoEmbedFacade } from "@/components/portfolio/video-embed-facade";
+import { Reveal } from "@/components/ui/reveal";
 
 // The one "official video" style entry we deliberately lead with here — best
 // production value of the catalog, so it's the first thing a visitor sees
@@ -29,7 +30,7 @@ export async function FeaturedSession() {
 
   return (
     <section className="border-t border-border bg-background">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-24">
+      <Reveal className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-24">
         <div className="flex flex-col gap-3">
           <span className="text-xs font-medium tracking-[0.2em] text-[var(--amber-glow)] uppercase">
             Hear it before you book it
@@ -47,7 +48,7 @@ export async function FeaturedSession() {
         />
 
         <p className="text-sm text-muted-foreground">{featured.title}</p>
-      </div>
+      </Reveal>
     </section>
   );
 }

@@ -128,7 +128,7 @@ export function SignUpForm({ redirectTo, reason }: SignUpFormProps) {
       <Button
         type="submit"
         disabled={isSubmitting}
-        className="mt-2 h-11 w-full rounded-full bg-[var(--amber-glow)] text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
+        className="mt-2 h-11 w-full rounded-none bg-[var(--amber-glow)] text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
       >
         {isSubmitting ? "Creating account…" : "Create account"}
       </Button>

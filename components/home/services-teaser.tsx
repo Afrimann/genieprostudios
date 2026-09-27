@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { getActiveServices } from "@/lib/repositories/service-repository";
 import { formatKobo } from "@/lib/utils/money";
+import { Reveal } from "@/components/ui/reveal";
 
 // Horizontal scroll-snap row of "rack units" — each category reads like a
 // module in an equipment rack rather than a repeated SaaS-style pricing
@@ -30,7 +31,7 @@ export async function ServicesTeaser() {
 
   return (
     <section className="border-t border-border bg-background">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-24">
+      <Reveal className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-24">
         <div className="flex flex-col gap-3">
           <span className="text-xs font-medium tracking-[0.2em] text-[var(--amber-glow)] uppercase">
             Services &amp; packages
@@ -51,7 +52,7 @@ export async function ServicesTeaser() {
                   <span
                     key={i}
                     style={{ height }}
-                    className="w-1.5 rounded-full bg-[var(--amber-glow)]/70"
+                    className="w-1.5 rounded-none bg-[var(--amber-glow)]/70"
                   />
                 ))}
               </div>
@@ -72,7 +73,7 @@ export async function ServicesTeaser() {
             <span aria-hidden="true">→</span>
           </Link>
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }

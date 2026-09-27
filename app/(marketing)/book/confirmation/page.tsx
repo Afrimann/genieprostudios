@@ -69,7 +69,7 @@ async function OrderSuccess({ bookingId }: { bookingId: string }) {
 
   return (
     <div className="flex flex-col items-center gap-6 text-center">
-      <div className="flex size-16 items-center justify-center rounded-full bg-[var(--amber-glow)]/15">
+      <div className="flex size-16 items-center justify-center rounded-none bg-[var(--amber-glow)]/15">
         <CheckCircle2 className="size-9 text-[var(--amber-glow)]" aria-hidden="true" />
       </div>
 
@@ -114,11 +114,11 @@ async function OrderSuccess({ bookingId }: { bookingId: string }) {
       <div className="flex flex-col gap-2 sm:flex-row">
         <Button
           asChild
-          className="h-11 rounded-full bg-[var(--amber-glow)] px-6 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
+          className="h-11 rounded-none bg-[var(--amber-glow)] px-6 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
         >
           <Link href={`/dashboard/${booking.id}`}>View your booking</Link>
         </Button>
-        <Button asChild variant="outline" className="h-11 rounded-full px-6 text-sm font-medium">
+        <Button asChild variant="outline" className="h-11 rounded-none px-6 text-sm font-medium">
           <Link href="/book">Book another session</Link>
         </Button>
       </div>
@@ -129,7 +129,7 @@ async function OrderSuccess({ bookingId }: { bookingId: string }) {
 function OrderFailed({ bookingId }: { bookingId: string | null }) {
   return (
     <div className="flex flex-col items-center gap-6 text-center">
-      <div className="flex size-16 items-center justify-center rounded-full bg-destructive/15">
+      <div className="flex size-16 items-center justify-center rounded-none bg-destructive/15">
         <XCircle className="size-9 text-destructive" aria-hidden="true" />
       </div>
 
@@ -147,13 +147,13 @@ function OrderFailed({ bookingId }: { bookingId: string | null }) {
       <div className="flex flex-col gap-2 sm:flex-row">
         <Button
           asChild
-          className="h-11 rounded-full bg-[var(--amber-glow)] px-6 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
+          className="h-11 rounded-none bg-[var(--amber-glow)] px-6 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
         >
           <Link href={bookingId ? `/dashboard/${bookingId}` : "/book"}>
             {bookingId ? "Review and retry" : "Start a new booking"}
           </Link>
         </Button>
-        <Button asChild variant="outline" className="h-11 rounded-full px-6 text-sm font-medium">
+        <Button asChild variant="outline" className="h-11 rounded-none px-6 text-sm font-medium">
           <Link href="/dashboard">Go to your dashboard</Link>
         </Button>
       </div>

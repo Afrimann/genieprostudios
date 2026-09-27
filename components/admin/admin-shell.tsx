@@ -106,7 +106,7 @@ export function AdminShell({ adminEmail, unresolvedCount, children }: AdminShell
                 {showBadge && (
                   <Badge
                     variant="destructive"
-                    className="ml-auto h-5 min-w-5 justify-center rounded-full px-1 text-[10px] tabular-nums"
+                    className="ml-auto h-5 min-w-5 justify-center rounded-none px-1 text-[10px] tabular-nums"
                   >
                     {unresolvedCount}
                   </Badge>

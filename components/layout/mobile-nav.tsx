@@ -106,7 +106,7 @@ export function MobileNav({ navItems, bookingsIcon }: MobileNavProps) {
               <div className="mt-2 flex items-center gap-2 border-t border-border pt-4">
                 <Button
                   asChild
-                  className="h-10 flex-1 rounded-full bg-[var(--amber-glow)] text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
+                  className="h-10 flex-1 rounded-none bg-[var(--amber-glow)] text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
                   onClick={close}
                 >
                   <Link href="/book">Book a session</Link>

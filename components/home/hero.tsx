@@ -149,7 +149,7 @@ function LiveMeter() {
       {bars.map((mult, i) => (
         <motion.span
           key={i}
-          className="w-[3px] rounded-full bg-[var(--amber-glow)]"
+          className="w-[3px] rounded-none bg-[var(--amber-glow)]"
           initial={{ height: 4 }}
           animate={{ height: [4, 14 * mult, 4] }}
           transition={{
@@ -217,7 +217,7 @@ export function Hero() {
             <Button
               asChild
               size="lg"
-              className="h-12 rounded-full bg-[var(--amber-glow)] px-7 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
+              className="h-12 rounded-none bg-[var(--amber-glow)] px-7 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
             >
               <Link href="/book">Book a session</Link>
             </Button>
@@ -225,7 +225,7 @@ export function Hero() {
               asChild
               variant="outline"
               size="lg"
-              className="h-12 rounded-full border-border/60 bg-transparent px-7 text-sm font-medium text-foreground hover:bg-secondary"
+              className="h-12 rounded-none border-border/60 bg-transparent px-7 text-sm font-medium text-foreground hover:bg-secondary"
             >
               <Link href="/services">View services</Link>
             </Button>

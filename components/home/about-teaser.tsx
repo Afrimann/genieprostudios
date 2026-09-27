@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 
 import { CountUp } from "@/components/home/count-up";
+import { Reveal } from "@/components/ui/reveal";
 
 // Deliberately not another photo+decorative-ring composition (that's the
 // Hero's language, once is enough) — stats read as a small bank of VU
@@ -21,7 +22,7 @@ const STATS = [
 export function AboutTeaser() {
   return (
     <section className="border-t border-border bg-background">
-      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-16 px-6 py-24 md:grid-cols-[0.85fr_1.15fr] md:items-center">
+      <Reveal className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-16 px-6 py-24 md:grid-cols-[0.85fr_1.15fr] md:items-center">
         {/* w-full + justify-between on mobile: three fixed max-w-[7rem]
             labels with a gap-5 flex row don't fit a narrow viewport (the
             row was overflowing past the right edge, cutting off the third
@@ -41,7 +42,7 @@ export function AboutTeaser() {
                 // ever registering as in-view.
                 viewport={{ once: true, margin: "-80px 0px" }}
                 transition={{ duration: 0.9, delay: i * 0.1, ease: "easeOut" }}
-                className="w-3 rounded-full bg-[var(--amber-glow)]"
+                className="w-3 rounded-none bg-[var(--amber-glow)]"
                 style={{ maxHeight: stat.barHeight }}
               />
               <p className="font-heading text-2xl font-medium text-foreground">
@@ -75,7 +76,7 @@ export function AboutTeaser() {
             Learn more about the studio →
           </Link>
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }

@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
+import { Reveal } from "@/components/ui/reveal";
+
 // Real names supplied by the client (2026-09-27); quotes drafted on their
 // behalf and meant to be reviewed/swapped for the client's actual words
 // whenever they send them — not sourced from an interview.
@@ -47,7 +49,7 @@ export function TestimonialsTeaser() {
 
   return (
     <section className="border-t border-border bg-background">
-      <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-8 px-6 py-24 text-center">
+      <Reveal className="mx-auto flex w-full max-w-3xl flex-col items-center gap-8 px-6 py-24 text-center">
         <span className="font-mono text-xs text-muted-foreground">
           {String(index + 1).padStart(2, "0")} / {String(TESTIMONIALS.length).padStart(2, "0")}
         </span>
@@ -79,12 +81,12 @@ export function TestimonialsTeaser() {
               aria-selected={i === index}
               aria-label={`Show testimonial ${i + 1}`}
               onClick={() => setIndex(i)}
-              className="h-1.5 w-6 rounded-full bg-border transition-colors data-[active=true]:bg-[var(--amber-glow)]"
+              className="h-1.5 w-6 rounded-none bg-border transition-colors data-[active=true]:bg-[var(--amber-glow)]"
               data-active={i === index}
             />
           ))}
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }

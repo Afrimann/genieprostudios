@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { getPublishedPortfolioEntries } from "@/lib/repositories/portfolio-repository";
 import { VideoEmbedFacade } from "@/components/portfolio/video-embed-facade";
+import { Reveal } from "@/components/ui/reveal";
 
 // The same one led with in FeaturedSession — excluded here so the two
 // sections never show the exact same clip twice on one page load.
@@ -41,7 +42,7 @@ export async function SessionsReel() {
 
   return (
     <section className="overflow-hidden border-t border-border bg-card">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-24">
+      <Reveal className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-24">
         <div className="flex flex-col gap-3">
           <span className="text-xs font-medium tracking-[0.2em] text-[var(--amber-glow)] uppercase">
             More from the sessions
@@ -76,7 +77,7 @@ export async function SessionsReel() {
             <span aria-hidden="true">→</span>
           </Link>
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }

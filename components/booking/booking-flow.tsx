@@ -516,7 +516,7 @@ function BookingSummaryStep({
               <p className="text-sm text-muted-foreground">Recording your acceptance…</p>
             )}
             {consentAccepted && (
-              <p className="flex items-center gap-1.5 text-sm text-emerald-500">
+              <p className="flex items-center gap-1.5 text-sm text-[var(--moss)]">
                 <Check className="size-4" aria-hidden="true" />
                 Terms accepted — you can proceed to payment.
               </p>
@@ -534,7 +534,7 @@ function BookingSummaryStep({
               type="button"
               disabled={!consentAccepted || isPaying}
               onClick={() => handlePayment("minimum")}
-              className="h-11 rounded-full bg-[var(--amber-glow)] text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)] sm:flex-1"
+              className="h-11 rounded-none bg-[var(--amber-glow)] text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)] sm:flex-1"
             >
               {paymentSubmitting === "minimum"
                 ? "Redirecting…"
@@ -545,7 +545,7 @@ function BookingSummaryStep({
               variant="outline"
               disabled={!consentAccepted || isPaying}
               onClick={() => handlePayment("full")}
-              className="h-11 rounded-full sm:flex-1"
+              className="h-11 rounded-none sm:flex-1"
             >
               {paymentSubmitting === "full"
                 ? "Redirecting…"
@@ -598,7 +598,7 @@ function Steps({
           <div key={step.key} className={`flex items-center ${i < STEP_ORDER.length - 1 ? "flex-1" : ""}`}>
             <div className="flex flex-col items-center gap-1.5">
               <div
-                className={`flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-medium transition-colors ${
+                className={`flex size-7 shrink-0 items-center justify-center rounded-none text-xs font-medium transition-colors ${
                   isDone
                     ? "bg-[var(--amber-glow)] text-[var(--primary-foreground)]"
                     : isCurrent

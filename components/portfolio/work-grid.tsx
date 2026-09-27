@@ -48,8 +48,8 @@ export function WorkGrid({ entries }: WorkGridProps) {
             onClick={() => setActiveFilter(filter.value)}
             className={
               activeFilter === filter.value
-                ? "rounded-full bg-[var(--amber-glow)] px-4 py-1.5 text-xs font-medium text-[var(--primary-foreground)] transition-colors"
-                : "rounded-full border border-border px-4 py-1.5 text-xs font-medium text-foreground/70 transition-colors hover:border-[var(--amber-glow)] hover:text-foreground"
+                ? "rounded-none bg-[var(--amber-glow)] px-4 py-1.5 text-xs font-medium text-[var(--primary-foreground)] transition-colors"
+                : "rounded-none border border-border px-4 py-1.5 text-xs font-medium text-foreground/70 transition-colors hover:border-[var(--amber-glow)] hover:text-foreground"
             }
           >
             {filter.label}
@@ -102,12 +102,12 @@ function WorkCard({ entry }: { entry: PortfolioEntry }) {
         <div className="absolute inset-0 bg-black/20 opacity-0 transition-opacity group-hover:opacity-100" />
 
         <span className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
-          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--amber-glow)] text-[var(--primary-foreground)]">
+          <span className="flex h-11 w-11 items-center justify-center rounded-none bg-[var(--amber-glow)] text-[var(--primary-foreground)]">
             <Play className="h-5 w-5 fill-current" />
           </span>
         </span>
 
-        <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
+        <span className="absolute right-2 top-2 rounded-none bg-black/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
           {entry.platform === "youtube" ? "YouTube" : "Instagram"}
         </span>
       </div>

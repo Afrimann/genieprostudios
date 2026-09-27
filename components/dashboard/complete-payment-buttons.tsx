@@ -62,7 +62,7 @@ export function CompletePaymentButtons({
           size="sm"
           disabled={isPaying}
           onClick={() => handlePayment("minimum")}
-          className="rounded-full bg-[var(--amber-glow)] text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
+          className="rounded-none bg-[var(--amber-glow)] text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
         >
           {submitting === "minimum" ? "Redirecting…" : `Pay deposit (${formatKobo(depositAmountKobo)})`}
         </Button>
@@ -72,7 +72,7 @@ export function CompletePaymentButtons({
           size="sm"
           disabled={isPaying}
           onClick={() => handlePayment("full")}
-          className="rounded-full"
+          className="rounded-none"
         >
           {submitting === "full" ? "Redirecting…" : `Pay in full (${formatKobo(totalPriceKobo)})`}
         </Button>

@@ -30,7 +30,7 @@ function WorkFallback() {
     <div className="flex flex-col gap-8">
       <div className="flex gap-2">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="h-8 w-20 animate-pulse rounded-full bg-muted" />
+          <div key={i} className="h-8 w-20 animate-pulse rounded-none bg-muted" />
         ))}
       </div>
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -73,7 +73,7 @@ export default function WorkPage() {
           <p className="text-sm text-muted-foreground">Ready to create something?</p>
           <Button
             asChild
-            className="h-11 rounded-full bg-[var(--amber-glow)] px-6 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
+            className="h-11 rounded-none bg-[var(--amber-glow)] px-6 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
           >
             <Link href="/book">Book a session</Link>
           </Button>
