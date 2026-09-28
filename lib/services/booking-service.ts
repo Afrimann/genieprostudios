@@ -8,14 +8,26 @@ export type BookingStatus =
   | "auto_cancelled"
   | "cancelled";
 
+// slot_id/session_date/session_start_time/session_end_time are only null
+// together, for an is_addon booking created via createAddonBooking() below
+// — a per-song service (e.g. mixing/mastering) has no studio room time to
+// reserve at all (see 0019_addon_bookings.sql's
+// bookings_session_fields_consistent check constraint, the DB-level source
+// of truth for this invariant). Never null for a real session booking
+// (createPendingBooking).
 export type Booking = {
   id: string;
   customer_id: string;
   service_id: string;
-  slot_id: string;
-  session_date: string;
-  session_start_time: string;
-  session_end_time: string;
+  slot_id: string | null;
+  session_date: string | null;
+  session_start_time: string | null;
+  session_end_time: string | null;
+  // Order contact info, collected once per order — only ever set on an
+  // is_addon booking (createAddonBooking below). Null for a room booking,
+  // which already has the customer's profile. See 0020_addon_song_details.sql.
+  contact_name: string | null;
+  contact_email: string | null;
   total_price_kobo: number;
   deposit_amount_kobo: number;
   amount_paid_kobo: number;
@@ -42,6 +54,9 @@ export type CreatePendingBookingResult =
   | { success: false; error: "outside_window"; message: string }
   | { success: false; error: "invalid_start_time"; message: string }
   | { success: false; error: "time_unavailable"; message: string }
+  | { success: false; error: "not_an_addon"; message: string }
+  | { success: false; error: "invalid_song_count"; message: string }
+  | { success: false; error: "invalid_contact"; message: string }
   | { success: false; error: "unknown"; message: string };
 
 /**
@@ -51,9 +66,12 @@ export type CreatePendingBookingResult =
  * customer-chosen startTime in a single transaction, after validating that
  * startTime against the window's bounds, the 30-minute grid, and overlap
  * with any existing non-cancelled booking already carved from that same
- * window. This is the ONLY supported way to create a booking — never insert
- * into bookings/availability_slots directly from application code, since
- * that would reintroduce the double-booking race the RPC exists to prevent.
+ * window. This is the ONLY supported way to create a booking that reserves
+ * real studio time — never insert into bookings/availability_slots directly
+ * from application code, since that would reintroduce the double-booking
+ * race the RPC exists to prevent. For an is_addon service with no room time
+ * to reserve (e.g. per-song mixing/mastering), use createAddonBooking
+ * below instead.
  *
  * `startTime` must be "HH:MM" or "HH:MM:SS" (matching the format used
  * elsewhere for AvailabilitySlot.start_time/end_time — see
@@ -87,6 +105,48 @@ export async function createPendingBooking(
     p_slot_id: slotId,
     p_service_id: serviceId,
     p_start_time: startTime,
+  });
+
+  if (error) {
+    return translateBookSlotError(error);
+  }
+
+  if (!data) {
+    return {
+      success: false,
+      error: "unknown",
+      message: "Booking could not be created. Please try again.",
+    };
+  }
+
+  return { success: true, booking: data as Booking };
+}
+
+/**
+ * Creates a pending booking for an is_addon service (e.g. per-song
+ * mixing/mastering) by calling create_addon_booking
+ * (supabase/migrations/0020_addon_song_details.sql) — the addon equivalent
+ * of createPendingBooking above. No slotId/startTime: an addon booking has
+ * no studio room time to reserve, so there's nothing to validate against a
+ * window's bounds/grid/overlap. The RPC prices the booking at
+ * price_kobo * songCount and records contactName/contactEmail — individual
+ * songs are recorded separately afterward via booking-tracks-repository.ts's
+ * createBookingTrack, one row per song, once each file has finished
+ * uploading to storage.
+ */
+export async function createAddonBooking(
+  serviceId: string,
+  songCount: number,
+  contactName: string,
+  contactEmail: string,
+): Promise<CreatePendingBookingResult> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("create_addon_booking", {
+    p_service_id: serviceId,
+    p_song_count: songCount,
+    p_contact_name: contactName,
+    p_contact_email: contactEmail,
   });
 
   if (error) {
@@ -167,6 +227,30 @@ function translateBookSlotError(error: {
       success: false,
       error: "time_unavailable",
       message: "That time was just booked (or is too close to another booking), please pick another.",
+    };
+  }
+
+  if (text.includes("not_an_addon")) {
+    return {
+      success: false,
+      error: "not_an_addon",
+      message: "This service requires a studio date and time. Please choose it from the regular booking flow.",
+    };
+  }
+
+  if (text.includes("invalid_song_count")) {
+    return {
+      success: false,
+      error: "invalid_song_count",
+      message: "Please add at least one song before continuing.",
+    };
+  }
+
+  if (text.includes("invalid_contact")) {
+    return {
+      success: false,
+      error: "invalid_contact",
+      message: "Please provide a valid name and email address.",
     };
   }
 

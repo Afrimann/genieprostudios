@@ -43,7 +43,7 @@ export default function LoginPage({
     <main className="bg-grain relative flex min-h-[calc(100vh-4rem)] flex-col items-center justify-center gap-6 overflow-hidden p-6">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute top-1/2 left-1/2 z-0 h-[36rem] w-[36rem] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-20 blur-3xl"
+        className="pointer-events-none absolute top-1/2 left-1/2 z-0 h-[36rem] w-[36rem] -translate-x-1/2 -translate-y-1/2 rounded-none opacity-20 blur-3xl"
         style={{ background: "radial-gradient(circle, var(--amber-glow), transparent 70%)" }}
       />
 

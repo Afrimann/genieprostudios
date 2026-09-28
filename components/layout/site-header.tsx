@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import { BookingsIconLink } from "@/components/layout/bookings-icon-link";
+import { HeaderAuthLinks } from "@/components/layout/header-auth-links";
 import { MobileNav } from "@/components/layout/mobile-nav";
 
 const NAV_ITEMS = [
@@ -38,7 +38,7 @@ export function SiteHeader() {
 
         <div className="hidden items-center gap-3 md:flex">
           <Suspense fallback={null}>
-            <BookingsIconLink />
+            <HeaderAuthLinks />
           </Suspense>
           <Button
             asChild
@@ -50,9 +50,9 @@ export function SiteHeader() {
 
         <MobileNav
           navItems={NAV_ITEMS}
-          bookingsIcon={
+          authLinks={
             <Suspense fallback={null}>
-              <BookingsIconLink />
+              <HeaderAuthLinks />
             </Suspense>
           }
         />

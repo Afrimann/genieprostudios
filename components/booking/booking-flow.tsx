@@ -6,7 +6,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Check } from "lucide-react";
 
-import { useBookingFlow } from "@/lib/hooks/use-booking-flow";
+import { useBookingFlow, type BookingStep } from "@/lib/hooks/use-booking-flow";
 import { useResetOnPageShow } from "@/lib/hooks/use-reset-on-pageshow";
 import type { Service } from "@/lib/repositories/service-repository";
 import type { AvailabilitySlot } from "@/lib/repositories/availability-repository";
@@ -21,6 +21,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { PackageCard } from "@/components/booking/package-card";
+import { AddonSongsStep } from "@/components/booking/addon-songs-step";
 import { CancelBookingButton } from "@/components/dashboard/cancel-booking-button";
 import {
   Card,
@@ -73,11 +74,16 @@ function SelectionSidebar({
   date,
   window,
   chosenTime,
+  songCount,
 }: {
   service: Service;
   date?: string | null;
   window?: AvailabilitySlot | null;
   chosenTime?: { start: string; end: string } | null;
+  // Set only once an addon booking's song count is known (after
+  // submitAddonSongs creates the booking) — swaps the per-song "Price" row
+  // for a "Songs" count + the real multiplied total.
+  songCount?: number;
 }) {
   return (
     <aside className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5">
@@ -90,12 +96,27 @@ function SelectionSidebar({
           <span className="text-muted-foreground">Package</span>
           <span className="text-right font-medium text-foreground">{service.label}</span>
         </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-muted-foreground">Price</span>
-          <span className="font-mono font-semibold text-foreground">
-            {formatKobo(service.price_kobo)}
-          </span>
-        </div>
+        {songCount ? (
+          <>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Songs</span>
+              <span className="font-medium text-foreground">{songCount}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Total</span>
+              <span className="font-mono font-semibold text-foreground">
+                {formatKobo(service.price_kobo * songCount)}
+              </span>
+            </div>
+          </>
+        ) : (
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">Price</span>
+            <span className="font-mono font-semibold text-foreground">
+              {formatKobo(service.price_kobo)}
+            </span>
+          </div>
+        )}
         {date && (
           <div className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground">Date</span>
@@ -156,6 +177,9 @@ export function BookingFlow({ initialServiceId }: BookingFlowProps) {
           {flow.servicesError && (
             <p className="text-sm text-destructive">{flow.servicesError}</p>
           )}
+          {flow.bookingError && (
+            <p className="text-sm text-destructive">{flow.bookingError}</p>
+          )}
 
           {!flow.servicesLoading && !flow.servicesError && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -165,6 +189,20 @@ export function BookingFlow({ initialServiceId }: BookingFlowProps) {
             </div>
           )}
         </div>
+      )}
+
+      {flow.step === "songs" && flow.selectedService && (
+        <StepLayout sidebar={<SelectionSidebar service={flow.selectedService} />}>
+          <AddonSongsStep
+            service={flow.selectedService}
+            bookingSubmitting={flow.bookingSubmitting}
+            bookingError={flow.bookingError}
+            songStatuses={flow.songStatuses}
+            songErrorMessages={flow.songErrorMessages}
+            onSubmit={flow.submitAddonSongs}
+            onBack={flow.backToService}
+          />
+        </StepLayout>
       )}
 
       {flow.step === "date" && flow.selectedService && (
@@ -325,10 +363,19 @@ export function BookingFlow({ initialServiceId }: BookingFlowProps) {
             <SelectionSidebar
               service={flow.selectedService}
               date={flow.booking.session_date}
-              chosenTime={{
-                start: flow.booking.session_start_time,
-                end: flow.booking.session_end_time,
-              }}
+              chosenTime={
+                flow.booking.session_start_time && flow.booking.session_end_time
+                  ? { start: flow.booking.session_start_time, end: flow.booking.session_end_time }
+                  : null
+              }
+              // is_addon booking: total_price_kobo was computed server-side
+              // as price_kobo * songCount (0020_addon_song_details.sql), so
+              // this division always lands on a whole number.
+              songCount={
+                flow.selectedService.is_addon
+                  ? flow.booking.total_price_kobo / flow.selectedService.price_kobo
+                  : undefined
+              }
             />
           }
         >
@@ -344,9 +391,11 @@ export function BookingFlow({ initialServiceId }: BookingFlowProps) {
 
 type SummaryBooking = {
   id: string;
-  session_date: string;
-  session_start_time: string;
-  session_end_time: string;
+  // Null for an is_addon booking (per-song mixing/mastering) — no studio
+  // room time was reserved. See startBookingForService in use-booking-flow.ts.
+  session_date: string | null;
+  session_start_time: string | null;
+  session_end_time: string | null;
   total_price_kobo: number;
   deposit_amount_kobo: number;
 };
@@ -430,10 +479,12 @@ function BookingSummaryStep({
           Almost there
         </span>
         <CardTitle className="text-xl">
-          {serviceLabel} — {booking.session_date}
+          {booking.session_date ? `${serviceLabel} — ${booking.session_date}` : serviceLabel}
         </CardTitle>
         <CardDescription>
-          {formatTimeRange(booking.session_start_time, booking.session_end_time)}
+          {booking.session_start_time && booking.session_end_time
+            ? formatTimeRange(booking.session_start_time, booking.session_end_time)
+            : "No studio time reserved — this is a per-song add-on, queued once payment is confirmed."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6 text-sm">
@@ -575,17 +626,17 @@ const STEP_ORDER: { key: "service" | "date" | "window" | "startTime" | "summary"
 ];
 
 // "window" collapses into the "Time" step visually — it's often
-// auto-skipped (single-window dates), so it doesn't get its own dot.
-function stepIndex(step: "service" | "date" | "window" | "startTime" | "summary"): number {
+// auto-skipped (single-window dates), so it doesn't get its own dot. An
+// addon booking's "songs" step (contact + track details, replacing
+// date/window/startTime entirely) collapses into the "Date" dot — the
+// closest equivalent "provide details" step in the visual progression.
+function stepIndex(step: BookingStep): number {
   if (step === "window") return 2;
+  if (step === "songs") return 1;
   return STEP_ORDER.findIndex((s) => s.key === step);
 }
 
-function Steps({
-  current,
-}: {
-  current: "service" | "date" | "window" | "startTime" | "summary";
-}) {
+function Steps({ current }: { current: BookingStep }) {
   const currentIndex = stepIndex(current);
 
   return (

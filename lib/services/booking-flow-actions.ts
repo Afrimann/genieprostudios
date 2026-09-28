@@ -13,7 +13,12 @@ import {
 } from "@/lib/repositories/availability-repository";
 import { cancelOwnPendingBooking } from "@/lib/repositories/booking-repository";
 import {
+  createBookingTrack,
+  type BookingTrack,
+} from "@/lib/repositories/booking-tracks-repository";
+import {
   createPendingBooking as createPendingBookingService,
+  createAddonBooking as createAddonBookingService,
   type CreatePendingBookingResult,
 } from "@/lib/services/booking-service";
 import {
@@ -94,6 +99,48 @@ export async function createPendingBooking(
   startTime: string,
 ): Promise<CreatePendingBookingResult> {
   return createPendingBookingService(slotId, serviceId, startTime);
+}
+
+/** Thin passthrough — same convention as createPendingBooking above, for
+ * the is_addon (per-song, no studio room time) path. See
+ * supabase/migrations/0020_addon_song_details.sql's create_addon_booking.
+ * Prices the booking at price_kobo * songCount server-side; the individual
+ * songs themselves are recorded afterward via saveBookingTrack below, once
+ * each file has finished uploading to storage. */
+export async function createAddonBooking(
+  serviceId: string,
+  songCount: number,
+  contactName: string,
+  contactEmail: string,
+): Promise<CreatePendingBookingResult> {
+  return createAddonBookingService(serviceId, songCount, contactName, contactEmail);
+}
+
+export type SaveBookingTrackResult =
+  | { success: true; track: BookingTrack }
+  | { success: false; message: string };
+
+/**
+ * Records one song's title + already-uploaded file path against a booking.
+ * Called once per song, after that song's file has finished uploading
+ * directly to the track-uploads storage bucket from the browser (see
+ * lib/hooks/use-booking-flow.ts's submitAddonSongs) — this function never
+ * touches file bytes itself, only the booking_tracks row.
+ */
+export async function saveBookingTrack(params: {
+  bookingId: string;
+  position: number;
+  title: string;
+  filePath: string;
+  fileName: string;
+}): Promise<SaveBookingTrackResult> {
+  try {
+    const track = await createBookingTrack(params);
+    return { success: true, track };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to save this song.";
+    return { success: false, message };
+  }
 }
 
 export type CancelBookingResult =

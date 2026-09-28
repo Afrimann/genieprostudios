@@ -66,6 +66,9 @@ async function OrderSuccess({ bookingId }: { bookingId: string }) {
   }
 
   const remainingKobo = booking.totalPriceKobo - booking.amountPaidKobo;
+  const hasSession = Boolean(
+    booking.sessionDate && booking.sessionStartTime && booking.sessionEndTime,
+  );
 
   return (
     <div className="flex flex-col items-center gap-6 text-center">
@@ -76,7 +79,9 @@ async function OrderSuccess({ bookingId }: { bookingId: string }) {
       <div className="flex flex-col gap-2">
         <h1 className="font-heading text-3xl font-medium text-foreground">Booking confirmed!</h1>
         <p className="text-sm text-muted-foreground">
-          You&apos;re booked in for {booking.service.label} on {booking.sessionDate}.
+          {hasSession
+            ? `You're booked in for ${booking.service.label} on ${booking.sessionDate}.`
+            : `Your ${booking.service.label} order is confirmed and queued.`}
         </p>
       </div>
 
@@ -85,16 +90,39 @@ async function OrderSuccess({ bookingId }: { bookingId: string }) {
           <span className="text-muted-foreground">Package</span>
           <span className="font-medium text-foreground">{booking.service.label}</span>
         </div>
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Date</span>
-          <span className="font-medium text-foreground">{booking.sessionDate}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground">Time</span>
-          <span className="font-medium text-foreground">
-            {formatTimeRange(booking.sessionStartTime, booking.sessionEndTime)}
-          </span>
-        </div>
+        {hasSession ? (
+          <>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Date</span>
+              <span className="font-medium text-foreground">{booking.sessionDate}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Time</span>
+              <span className="font-medium text-foreground">
+                {formatTimeRange(booking.sessionStartTime!, booking.sessionEndTime!)}
+              </span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Studio time</span>
+              <span className="font-medium text-foreground">Not applicable — per-song add-on</span>
+            </div>
+            {booking.tracks.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <span className="text-muted-foreground">Songs</span>
+                <ul className="flex flex-col gap-0.5">
+                  {booking.tracks.map((track, index) => (
+                    <li key={`${track.title}-${index}`} className="font-medium text-foreground">
+                      {index + 1}. {track.title}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </>
+        )}
         <div className="flex items-center justify-between border-t border-border pt-3">
           <span className="text-muted-foreground">Amount paid</span>
           <span className="font-mono font-semibold text-foreground">

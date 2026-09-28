@@ -7,6 +7,7 @@ import {
   CalendarClock,
   AlertTriangle,
   Clapperboard,
+  MessageCircle,
   LogOut,
   Radio,
 } from "lucide-react";
@@ -18,6 +19,7 @@ const NAV_ITEMS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/availability", label: "Availability", icon: CalendarClock },
   { href: "/admin/bookings", label: "Bookings", icon: AlertTriangle },
+  { href: "/admin/support", label: "Support", icon: MessageCircle },
   { href: "/admin/portfolio", label: "Portfolio", icon: Clapperboard },
 ] as const;
 
@@ -40,6 +42,7 @@ function currentPageLabel(pathname: string | null): string {
 interface AdminShellProps {
   adminEmail: string;
   unresolvedCount: number;
+  openSupportCount: number;
   children: React.ReactNode;
 }
 
@@ -57,7 +60,7 @@ interface AdminShellProps {
  * texture on top of colors that already apply everywhere) rather than
  * inventing a separate admin palette.
  */
-export function AdminShell({ adminEmail, unresolvedCount, children }: AdminShellProps) {
+export function AdminShell({ adminEmail, unresolvedCount, openSupportCount, children }: AdminShellProps) {
   const pathname = usePathname();
 
   async function handleSignOut() {
@@ -86,7 +89,13 @@ export function AdminShell({ adminEmail, unresolvedCount, children }: AdminShell
                 ? pathname === "/admin"
                 : pathname?.startsWith(item.href);
             const Icon = item.icon;
-            const showBadge = item.href === "/admin/bookings" && unresolvedCount > 0;
+            const badgeCount =
+              item.href === "/admin/bookings"
+                ? unresolvedCount
+                : item.href === "/admin/support"
+                  ? openSupportCount
+                  : 0;
+            const showBadge = badgeCount > 0;
 
             return (
               <Link
@@ -108,7 +117,7 @@ export function AdminShell({ adminEmail, unresolvedCount, children }: AdminShell
                     variant="destructive"
                     className="ml-auto h-5 min-w-5 justify-center rounded-none px-1 text-[10px] tabular-nums"
                   >
-                    {unresolvedCount}
+                    {badgeCount}
                   </Badge>
                 )}
               </Link>

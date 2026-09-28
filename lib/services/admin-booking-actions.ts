@@ -10,6 +10,7 @@ import {
   markBookingStale,
   type UnresolvedBooking,
 } from "@/lib/repositories/admin-booking-repository";
+import { getTrackDownloadUrl } from "@/lib/repositories/booking-tracks-repository";
 import {
   getOpenDatesInRange,
   getOpenSlotsForDate,
@@ -113,4 +114,23 @@ export async function rescheduleBookingAction(
   startTime: string,
 ): Promise<RescheduleBookingResult> {
   return rescheduleBooking(bookingId, slotId, startTime);
+}
+
+export type GetTrackDownloadUrlResult =
+  | { success: true; url: string }
+  | { success: false; message: string };
+
+/**
+ * Signed download URL for an addon booking's uploaded track — relies on the
+ * track_uploads_select_admin storage policy (0020_addon_song_details.sql),
+ * so this only succeeds when called by an admin's own session.
+ */
+export async function getTrackDownloadUrlAction(filePath: string): Promise<GetTrackDownloadUrlResult> {
+  try {
+    const url = await getTrackDownloadUrl(filePath);
+    return { success: true, url };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to generate a download link.";
+    return { success: false, message };
+  }
 }

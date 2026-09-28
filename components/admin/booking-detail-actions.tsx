@@ -22,11 +22,16 @@ export function BookingDetailActions({
   serviceId,
   status,
   canMarkStale,
+  hasSession,
 }: {
   bookingId: string;
   serviceId: string;
   status: BookingStatus;
   canMarkStale: boolean;
+  // False for an is_addon booking (per-song mixing/mastering) — there's no
+  // studio time slot to move, so "Reschedule" doesn't apply regardless of
+  // status. See supabase/migrations/0019_addon_bookings.sql.
+  hasSession: boolean;
 }) {
   const router = useRouter();
   const [staleSubmitting, setStaleSubmitting] = useState(false);
@@ -47,7 +52,7 @@ export function BookingDetailActions({
     router.refresh();
   }
 
-  const canReschedule = RESCHEDULABLE_STATUSES.includes(status);
+  const canReschedule = hasSession && RESCHEDULABLE_STATUSES.includes(status);
 
   if (!canMarkStale && !canReschedule) {
     return null;

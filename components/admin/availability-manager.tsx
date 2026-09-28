@@ -243,9 +243,14 @@ export function AvailabilityManager() {
                           className="flex items-center justify-between gap-3 text-xs"
                         >
                           <span className="text-muted-foreground">
+                            {/* Non-null by construction: every booking in a window's own
+                                list has a real slot_id, and slot_id/session_* fields are
+                                only ever null together for an is_addon booking (see
+                                0019_addon_bookings.sql's consistency check) — an addon
+                                booking has no slot_id, so it can never appear here. */}
                             {formatTimeRange(
-                              booking.session_start_time,
-                              booking.session_end_time,
+                              booking.session_start_time!,
+                              booking.session_end_time!,
                             )}
                           </span>
                           <Badge variant={BOOKING_STATUS_VARIANTS[booking.status]}>

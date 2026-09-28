@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { getUnresolvedCount } from "@/lib/repositories/admin-dashboard-repository";
+import { getOpenTicketsAwaitingReplyCount } from "@/lib/repositories/admin-support-repository";
 import { AdminShell } from "@/components/admin/admin-shell";
 
 // Owner-only area. Lives in the (protected) route group specifically so that
@@ -49,10 +50,17 @@ export default async function AdminLayout({
     redirect("/admin/login");
   }
 
-  const unresolvedCount = await getUnresolvedCount();
+  const [unresolvedCount, openSupportCount] = await Promise.all([
+    getUnresolvedCount(),
+    getOpenTicketsAwaitingReplyCount(),
+  ]);
 
   return (
-    <AdminShell adminEmail={user.email ?? "Admin"} unresolvedCount={unresolvedCount}>
+    <AdminShell
+      adminEmail={user.email ?? "Admin"}
+      unresolvedCount={unresolvedCount}
+      openSupportCount={openSupportCount}
+    >
       {children}
     </AdminShell>
   );

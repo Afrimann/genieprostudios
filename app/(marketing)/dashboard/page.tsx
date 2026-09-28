@@ -86,8 +86,9 @@ async function DashboardBookings() {
                     {booking.serviceName}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {booking.session_date} ·{" "}
-                    {formatTimeRange(booking.session_start_time, booking.session_end_time)}
+                    {booking.session_date && booking.session_start_time && booking.session_end_time
+                      ? `${booking.session_date} · ${formatTimeRange(booking.session_start_time, booking.session_end_time)}`
+                      : "Per-song add-on — no studio time"}
                   </p>
                 </div>
                 <Badge variant={STATUS_VARIANTS[booking.status]}>

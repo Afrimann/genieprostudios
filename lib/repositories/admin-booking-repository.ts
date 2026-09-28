@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Booking, BookingStatus } from "@/lib/services/booking-service";
+import { getTracksForBooking } from "@/lib/repositories/booking-tracks-repository";
 
 // Admin-facing booking repository — dumb data access only, same convention
 // as availability-repository.ts. Relies on RLS (bookings_select_admin/
@@ -138,14 +139,17 @@ export async function markBookingStale(bookingId: string): Promise<Booking | nul
 // payment history, its T&Cs acceptance record).
 // ---------------------------------------------------------------------------
 
+// sessionDate/sessionStartTime/sessionEndTime are null for an is_addon
+// booking (per-song mixing/mastering) — no studio room time was reserved.
+// See supabase/migrations/0019_addon_bookings.sql.
 export type AdminBookingListItem = {
   id: string;
   customerName: string | null;
   customerEmail: string | null;
   serviceLabel: string;
-  sessionDate: string;
-  sessionStartTime: string;
-  sessionEndTime: string;
+  sessionDate: string | null;
+  sessionStartTime: string | null;
+  sessionEndTime: string | null;
   totalPriceKobo: number;
   amountPaidKobo: number;
   status: BookingStatus;
@@ -212,14 +216,16 @@ export async function getAllBookingsForAdmin(): Promise<AdminBookingListItem[]> 
   });
 }
 
+// sessionDate/sessionStartTime/sessionEndTime are null for an is_addon
+// booking — see AdminBookingListItem above.
 export type AdminBookingDetail = {
   id: string;
   status: BookingStatus;
   createdAt: string;
   updatedAt: string;
-  sessionDate: string;
-  sessionStartTime: string;
-  sessionEndTime: string;
+  sessionDate: string | null;
+  sessionStartTime: string | null;
+  sessionEndTime: string | null;
   totalPriceKobo: number;
   depositAmountKobo: number;
   amountPaidKobo: number;
@@ -233,6 +239,11 @@ export type AdminBookingDetail = {
     isAddon: boolean;
   };
   window: { id: string; date: string; startTime: string; endTime: string; status: string } | null;
+  // Order contact info + per-song details — only ever set for an is_addon
+  // booking. See booking.contact_name/booking_tracks, 0020_addon_song_details.sql.
+  contactName: string | null;
+  contactEmail: string | null;
+  tracks: { id: string; title: string; fileName: string; filePath: string }[];
   payments: {
     id: string;
     paystackReference: string;
@@ -270,7 +281,7 @@ export async function getBookingDetailForAdmin(bookingId: string): Promise<Admin
     return null;
   }
 
-  const [profileRes, serviceRes, windowRes, paymentsRes, tcRes] = await Promise.all([
+  const [profileRes, serviceRes, windowRes, paymentsRes, tcRes, tracks] = await Promise.all([
     supabase.from("profiles").select("full_name, email, phone").eq("id", booking.customer_id).maybeSingle(),
     supabase
       .from("services")
@@ -294,6 +305,7 @@ export async function getBookingDetailForAdmin(bookingId: string): Promise<Admin
           .eq("id", booking.tc_acceptance_id)
           .maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    getTracksForBooking(bookingId),
   ]);
 
   if (profileRes.error) {
@@ -353,6 +365,14 @@ export async function getBookingDetailForAdmin(bookingId: string): Promise<Admin
     window: window
       ? { id: window.id, date: window.date, startTime: window.start_time, endTime: window.end_time, status: window.status }
       : null,
+    contactName: booking.contact_name,
+    contactEmail: booking.contact_email,
+    tracks: tracks.map((t) => ({
+      id: t.id,
+      title: t.title,
+      fileName: t.file_name,
+      filePath: t.file_path,
+    })),
     payments: (paymentsRes.data ?? []).map((p) => ({
       id: p.id,
       paystackReference: p.paystack_reference,

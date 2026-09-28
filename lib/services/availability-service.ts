@@ -299,9 +299,18 @@ export async function getValidStartTimesForWindow(
     // "existing booking" blocking candidates around itself. The customer
     // booking flow never passes this (there is no booking to exclude yet),
     // so it's a no-op filter there.
-    const existingBookings = excludeBookingId
-      ? allBookings.filter((b) => b.id !== excludeBookingId)
-      : allBookings;
+    // getBookingsForSlot(slotId) only ever returns bookings that have this
+    // real window as their slot_id — by 0019_addon_bookings.sql's
+    // consistency check, slot_id is non-null iff every session_* field is
+    // too, so this filter is a type-narrow of an invariant that already
+    // holds, not a behavior change (an is_addon booking has no slot_id and
+    // could never be returned here in the first place).
+    const existingBookings = allBookings
+      .filter((b) => (excludeBookingId ? b.id !== excludeBookingId : true))
+      .filter(
+        (b): b is typeof b & { session_start_time: string; session_end_time: string } =>
+          b.session_start_time !== null && b.session_end_time !== null,
+      );
 
     if (!window) {
       return {

@@ -10,6 +10,7 @@ import {
 import { formatKobo } from "@/lib/utils/money";
 import { Badge } from "@/components/ui/badge";
 import { BookingDetailActions } from "@/components/admin/booking-detail-actions";
+import { TrackDownloadButton } from "@/components/admin/track-download-button";
 
 // Behind app/admin/(protected)/layout.tsx's live session+admin check, so
 // this page can never be meaningfully prerendered either — same reasoning as
@@ -110,11 +111,17 @@ async function BookingDetail({ id }: { id: string }) {
                 : `${booking.service.durationHours} hour${booking.service.durationHours === 1 ? "" : "s"}`
             }
           />
-          <Field label="Date" value={booking.sessionDate} />
-          <Field
-            label="Time"
-            value={formatTimeRange(booking.sessionStartTime, booking.sessionEndTime)}
-          />
+          {booking.sessionDate && booking.sessionStartTime && booking.sessionEndTime ? (
+            <>
+              <Field label="Date" value={booking.sessionDate} />
+              <Field
+                label="Time"
+                value={formatTimeRange(booking.sessionStartTime, booking.sessionEndTime)}
+              />
+            </>
+          ) : (
+            <Field label="Studio time" value="Not applicable — per-song add-on" />
+          )}
           {booking.window && (
             <Field
               label="Window"
@@ -149,6 +156,30 @@ async function BookingDetail({ id }: { id: string }) {
           )}
         </DetailCard>
       </div>
+
+      {booking.tracks.length > 0 && (
+        <DetailCard title="Songs">
+          {(booking.contactName || booking.contactEmail) && (
+            <div className="flex flex-col gap-2 border-b border-border pb-3">
+              <Field label="Contact name" value={booking.contactName ?? "—"} />
+              <Field label="Contact email" value={booking.contactEmail ?? "—"} />
+            </div>
+          )}
+          <div className="flex flex-col divide-y divide-border">
+            {booking.tracks.map((track, index) => (
+              <div key={track.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                <div className="flex flex-col">
+                  <span className="font-medium text-foreground">
+                    {index + 1}. {track.title}
+                  </span>
+                  <span className="font-mono text-xs text-muted-foreground">{track.fileName}</span>
+                </div>
+                <TrackDownloadButton filePath={track.filePath} />
+              </div>
+            ))}
+          </div>
+        </DetailCard>
+      )}
 
       <DetailCard title="Payment history">
         {booking.payments.length === 0 && (
@@ -186,6 +217,7 @@ async function BookingDetail({ id }: { id: string }) {
         serviceId={booking.service.id}
         status={booking.status}
         canMarkStale={canMarkStale}
+        hasSession={Boolean(booking.sessionDate)}
       />
     </div>
   );

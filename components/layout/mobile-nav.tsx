@@ -12,7 +12,7 @@ type NavItem = { href: string; label: string };
 
 interface MobileNavProps {
   navItems: NavItem[];
-  bookingsIcon: ReactNode;
+  authLinks: ReactNode;
 }
 
 const linkClassName =
@@ -63,7 +63,7 @@ function NavLinksWithPathname({
   return <NavLinks navItems={navItems} activePathname={pathname} onNavigate={onNavigate} />;
 }
 
-export function MobileNav({ navItems, bookingsIcon }: MobileNavProps) {
+export function MobileNav({ navItems, authLinks }: MobileNavProps) {
   const [open, setOpen] = useState(false);
 
   // Any navigation (link click, or the browser/back-forward changing the
@@ -111,7 +111,7 @@ export function MobileNav({ navItems, bookingsIcon }: MobileNavProps) {
                 >
                   <Link href="/book">Book a session</Link>
                 </Button>
-                {bookingsIcon}
+                {authLinks}
               </div>
             </nav>
           </motion.div>

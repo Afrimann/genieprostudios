@@ -1,18 +1,22 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Booking, BookingStatus } from "@/lib/services/booking-service";
+import { getTracksForBooking } from "@/lib/repositories/booking-tracks-repository";
 
 // Shape the dashboard needs to render a booking card: enough of the booking
 // itself plus the joined service label, per project-notes.md's Component ->
 // Hook -> Service -> Repository layering (this repository is dumb data
 // access only — no business rules, no status derivation, that lives in
 // services/the webhook handler).
+// session_date/session_start_time/session_end_time are null for an
+// is_addon booking (per-song mixing/mastering) — no studio room time was
+// reserved. See supabase/migrations/0019_addon_bookings.sql.
 export type CustomerBooking = {
   id: string;
   serviceName: string;
-  session_date: string;
-  session_start_time: string;
-  session_end_time: string;
+  session_date: string | null;
+  session_start_time: string | null;
+  session_end_time: string | null;
   total_price_kobo: number;
   deposit_amount_kobo: number;
   amount_paid_kobo: number;
@@ -84,9 +88,9 @@ export async function getBookingsForCurrentCustomer(): Promise<CustomerBooking[]
 
   type JoinedRow = {
     id: string;
-    session_date: string;
-    session_start_time: string;
-    session_end_time: string;
+    session_date: string | null;
+    session_start_time: string | null;
+    session_end_time: string | null;
     total_price_kobo: number;
     deposit_amount_kobo: number;
     amount_paid_kobo: number;
@@ -125,18 +129,23 @@ export async function getBookingsForCurrentCustomer(): Promise<CustomerBooking[]
 // them to see what they've actually paid and when.
 // ---------------------------------------------------------------------------
 
+// sessionDate/sessionStartTime/sessionEndTime are null for an is_addon
+// booking — see CustomerBooking above.
 export type CustomerBookingDetail = {
   id: string;
   status: BookingStatus;
   createdAt: string;
-  sessionDate: string;
-  sessionStartTime: string;
-  sessionEndTime: string;
+  sessionDate: string | null;
+  sessionStartTime: string | null;
+  sessionEndTime: string | null;
   totalPriceKobo: number;
   depositAmountKobo: number;
   amountPaidKobo: number;
   service: { label: string; durationHours: number; isAddon: boolean };
   payments: { id: string; type: string; amountKobo: number; status: string; createdAt: string }[];
+  // Only ever populated for an is_addon booking (see booking_tracks,
+  // 0020_addon_song_details.sql) — empty for a room booking.
+  tracks: { title: string }[];
 };
 
 /**
@@ -199,6 +208,8 @@ export async function getBookingDetailForCustomer(
   const serviceJoin = booking.services as ServiceJoin | ServiceJoin[] | null;
   const service = Array.isArray(serviceJoin) ? serviceJoin[0] : serviceJoin;
 
+  const tracks = service?.is_addon ? await getTracksForBooking(bookingId) : [];
+
   return {
     id: booking.id,
     status: booking.status,
@@ -221,6 +232,7 @@ export async function getBookingDetailForCustomer(
       status: p.status,
       createdAt: p.created_at,
     })),
+    tracks: tracks.map((t) => ({ title: t.title })),
   };
 }
 

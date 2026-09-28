@@ -233,3 +233,32 @@ export async function sendAutoCancelOwnerEmail(params: {
     html,
   });
 }
+
+/**
+ * Owner notification fired from support-service.ts's sendTicketMessage()
+ * whenever a CUSTOMER sends a message on their front-desk ticket (never for
+ * an admin's own reply) — best-effort, same as every other email here.
+ */
+export async function sendOwnerNewSupportMessageEmail(params: {
+  ownerEmail: string;
+  customerName: string;
+  customerEmail: string;
+  subject: string;
+  body: string;
+  ticketUrl: string;
+}): Promise<SendEmailResult> {
+  const { ownerEmail, customerName, customerEmail, subject, body, ticketUrl } = params;
+
+  const html = `
+    <h2>New message from the front desk chat</h2>
+    <p><strong>${customerName}</strong> (${customerEmail}) wrote in on: <strong>${subject}</strong></p>
+    <blockquote style="margin:0;padding-left:12px;border-left:3px solid #ccc;">${body}</blockquote>
+    <p><a href="${ticketUrl}">Reply in the admin dashboard</a></p>
+  `.trim();
+
+  return sendEmail({
+    to: ownerEmail,
+    subject: `Front desk: ${customerName} — ${subject}`,
+    html,
+  });
+}

@@ -57,8 +57,9 @@ async function AllBookingsTable() {
               {booking.customerName ?? "Unknown customer"}
             </span>
             <span className="truncate text-xs text-muted-foreground">
-              {booking.serviceLabel} — {booking.sessionDate} at{" "}
-              {formatTimeRange(booking.sessionStartTime, booking.sessionEndTime)}
+              {booking.sessionDate && booking.sessionStartTime && booking.sessionEndTime
+                ? `${booking.serviceLabel} — ${booking.sessionDate} at ${formatTimeRange(booking.sessionStartTime, booking.sessionEndTime)}`
+                : `${booking.serviceLabel} — per-song add-on, no studio time`}
             </span>
           </div>
 

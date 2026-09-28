@@ -76,6 +76,9 @@ async function BookingDetail({ id }: { id: string }) {
   }
 
   const remainingKobo = booking.totalPriceKobo - booking.amountPaidKobo;
+  const hasSession = Boolean(
+    booking.sessionDate && booking.sessionStartTime && booking.sessionEndTime,
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -85,7 +88,9 @@ async function BookingDetail({ id }: { id: string }) {
             {booking.service.label}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {booking.sessionDate} · {formatTimeRange(booking.sessionStartTime, booking.sessionEndTime)}
+            {hasSession
+              ? `${booking.sessionDate} · ${formatTimeRange(booking.sessionStartTime!, booking.sessionEndTime!)}`
+              : "Per-song add-on — no studio time reserved"}
           </p>
         </div>
         <Badge variant={STATUS_VARIANTS[booking.status]}>{STATUS_LABELS[booking.status]}</Badge>
@@ -102,8 +107,17 @@ async function BookingDetail({ id }: { id: string }) {
                 : `${booking.service.durationHours} hour${booking.service.durationHours === 1 ? "" : "s"}`
             }
           />
-          <Field label="Date" value={booking.sessionDate} />
-          <Field label="Time" value={formatTimeRange(booking.sessionStartTime, booking.sessionEndTime)} />
+          {hasSession ? (
+            <>
+              <Field label="Date" value={booking.sessionDate} />
+              <Field
+                label="Time"
+                value={formatTimeRange(booking.sessionStartTime!, booking.sessionEndTime!)}
+              />
+            </>
+          ) : (
+            <Field label="Studio time" value="Not applicable — per-song add-on" />
+          )}
           <Field label="Booked on" value={formatDateTime(booking.createdAt)} />
         </DetailCard>
 
@@ -121,6 +135,21 @@ async function BookingDetail({ id }: { id: string }) {
           />
         </DetailCard>
       </div>
+
+      {booking.tracks.length > 0 && (
+        <DetailCard title="Songs">
+          <div className="flex flex-col divide-y divide-border">
+            {booking.tracks.map((track, index) => (
+              <div key={`${track.title}-${index}`} className="flex items-center gap-2 py-2 text-sm">
+                <span className="font-mono text-xs text-muted-foreground">
+                  {String(index + 1).padStart(2, "0")}
+                </span>
+                <span className="font-medium text-foreground">{track.title}</span>
+              </div>
+            ))}
+          </div>
+        </DetailCard>
+      )}
 
       <DetailCard title="Payment history">
         {booking.payments.length === 0 && (
