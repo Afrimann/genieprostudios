@@ -48,34 +48,37 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* GenieProStudios "Tape Room" identity (2026-09-27, replaces the earlier
-   "stereo vibe" amber palette per the studio-color-scheme-v2 reference) —
-   fixed dark, no light/dark toggle. Warm near-black (not blue-black, reads
-   as film rather than screen) + burnt-orange accent (the one "live" color
-   on the page, standing in for a recording lamp) + a muted moss green used
-   sparingly for quiet "available/ready" signals, never competing with the
-   orange. Applied through the same shadcn variable names so every existing
-   component (button, card, badge, etc.) picks up the theme with zero
-   per-component changes. */
+/* GenieProStudios "Prophetic Praise" identity (2026-09-28, replaces the
+   "Tape Room" amber/moss palette per the owner's own direction — yellow,
+   purple, black, explicitly "something that stands out... not a low key
+   color"). Near-black stays near-black but with a purple undertone instead
+   of the old warm brown, so it reads as one cohesive stage-lighting palette
+   rather than two clashing warm/cool bases. Bold gold-yellow is the one
+   "live" color (CTAs, links, the recording-lamp role the burnt-orange used
+   to play); a rich violet is the secondary accent standing in for the
+   stage-light "moss" used to play — sparing, atmospheric, never competing
+   with the yellow. Applied through the same shadcn variable names so every
+   existing component (button, card, badge, etc.) picks up the theme with
+   zero per-component changes. */
 :root {
-  --background: #15110d;
-  --foreground: #efe6d0;
-  --card: #1d1812;
-  --card-foreground: #efe6d0;
-  --popover: #1d1812;
-  --popover-foreground: #efe6d0;
-  --primary: #c74a1f;
-  --primary-foreground: #15110d;
-  --secondary: #1d1812;
-  --secondary-foreground: #efe6d0;
-  --muted: #1d1812;
-  --muted-foreground: #b8ac93;
-  --accent: #c74a1f;
-  --accent-foreground: #15110d;
-  --destructive: #b3392f;
-  --border: #3a3128;
-  --input: #4a3d30;
-  --ring: #c74a1f;
+  --background: #120b16;
+  --foreground: #f3eee0;
+  --card: #1a1020;
+  --card-foreground: #f3eee0;
+  --popover: #1a1020;
+  --popover-foreground: #f3eee0;
+  --primary: #f2c230;
+  --primary-foreground: #120b16;
+  --secondary: #1a1020;
+  --secondary-foreground: #f3eee0;
+  --muted: #1a1020;
+  --muted-foreground: #bab0c4;
+  --accent: #f2c230;
+  --accent-foreground: #120b16;
+  --destructive: #d1453a;
+  --border: #332940;
+  --input: #443658;
+  --ring: #f2c230;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -88,28 +91,28 @@
      rounded-full (never part of this scale) is handled separately — see
      the sitewide sweep replacing it with rounded-none. */
   --radius: 0rem;
-  --sidebar: #1d1812;
-  --sidebar-foreground: #efe6d0;
-  --sidebar-primary: #c74a1f;
-  --sidebar-primary-foreground: #15110d;
-  --sidebar-accent: #1d1812;
-  --sidebar-accent-foreground: #efe6d0;
-  --sidebar-border: #3a3128;
-  --sidebar-ring: #c74a1f;
+  --sidebar: #1a1020;
+  --sidebar-foreground: #f3eee0;
+  --sidebar-primary: #f2c230;
+  --sidebar-primary-foreground: #120b16;
+  --sidebar-accent: #1a1020;
+  --sidebar-accent-foreground: #f3eee0;
+  --sidebar-border: #332940;
+  --sidebar-ring: #f2c230;
 
   /* Studio-identity extras, not part of the shadcn set above. Kept under
-     their original --amber-* names (now burnt-orange values) since ~38
+     their original --amber-* names (now gold-yellow values) since ~38
      files already reference them directly via arbitrary Tailwind values
      (e.g. bg-[var(--amber-glow)]) — repointing the values here reskins the
      whole site without touching every one of those files. */
-  --amber-glow: #c74a1f;
-  --amber-dim: #a83d19;
-  /* New: the reference's sparing secondary accent — quiet "available/
-     ready" signals (e.g. a positive number, an "open" state), never used
-     for primary CTAs. */
-  --moss: #536b5a;
-  --paper-faint: #7d7360;
-  --rule: #3a3128;
+  --amber-glow: #f2c230;
+  --amber-dim: #d1a324;
+  /* Repointed from the old muted moss green to the owner's purple — same
+     role as before: sparing secondary accent, quiet "available/ready"
+     signals, never used for primary CTAs (that's still --amber-glow). */
+  --moss: #7c3aed;
+  --paper-faint: #8a7d99;
+  --rule: #332940;
 }
 
 .dark {

@@ -288,11 +288,17 @@ export async function getBookingDetailForAdmin(bookingId: string): Promise<Admin
       .select("id, label, category, duration_hours, price_kobo, is_addon")
       .eq("id", booking.service_id)
       .maybeSingle(),
-    supabase
-      .from("availability_slots")
-      .select("id, date, start_time, end_time, status")
-      .eq("id", booking.slot_id)
-      .maybeSingle(),
+    // Null for an is_addon booking (per-song mixing/mastering) — no studio
+    // window was ever reserved. See 0019_addon_bookings.sql. Skipping the
+    // query entirely (rather than passing null to .eq()) avoids Postgres
+    // rejecting "null" as an invalid uuid literal.
+    booking.slot_id
+      ? supabase
+          .from("availability_slots")
+          .select("id, date, start_time, end_time, status")
+          .eq("id", booking.slot_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
     supabase
       .from("payments")
       .select("id, paystack_reference, type, amount_kobo, status, verified_at, created_at")

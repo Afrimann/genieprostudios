@@ -26,7 +26,15 @@ export type SupportMessage = {
   created_at: string;
 };
 
-/** The caller's single open ticket, if any — see the one-open-ticket-at-a-time rule (0021). */
+/**
+ * The caller's single open ticket, if any — see the one-open-ticket-at-a-time
+ * rule (0021_support_tickets.sql's partial unique index). Defensively picks
+ * the most recently created row rather than using .maybeSingle() directly:
+ * if that invariant was ever violated (e.g. the unique index failed to
+ * apply against pre-existing duplicate rows — see 0022_support_tickets_dedupe.sql),
+ * .maybeSingle() throws "multiple rows returned" and crashes the whole
+ * page instead of just showing one ticket.
+ */
 export async function getMyOpenTicket(): Promise<SupportTicket | null> {
   const supabase = await createClient();
 
@@ -34,13 +42,14 @@ export async function getMyOpenTicket(): Promise<SupportTicket | null> {
     .from("support_tickets")
     .select("*")
     .eq("status", "open")
-    .maybeSingle();
+    .order("created_at", { ascending: false })
+    .limit(1);
 
   if (error) {
     throw new Error(`getMyOpenTicket: ${error.message}`);
   }
 
-  return (data as SupportTicket) ?? null;
+  return ((data as SupportTicket[])[0] as SupportTicket | undefined) ?? null;
 }
 
 /** Past conversations, most recently closed first. */

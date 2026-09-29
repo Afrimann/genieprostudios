@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "framer-motion";
-import { Play } from "lucide-react";
 
 import { CountUp } from "@/components/home/count-up";
 import { Reveal } from "@/components/ui/reveal";
 import { Button } from "@/components/ui/button";
+import { AmbientVideo } from "@/components/media/ambient-video";
+import { BehindTheScenes } from "@/components/about/behind-the-scenes";
 
 // TODO(client): estimates pending real figures from the studio owner —
 // kept in sync with components/home/about-teaser.tsx's STATS, swap both for
@@ -188,8 +190,13 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="overflow-hidden border-b border-border bg-card py-10">
-        <Reveal className="overflow-hidden">
+      <section className="relative overflow-hidden border-b border-border bg-card py-10">
+        <AmbientVideo
+          src="/videos/drumkit-ambient.mp4"
+          poster="/videos/posters/drumkit-ambient.jpg"
+          overlayClassName="bg-background/80"
+        />
+        <Reveal className="relative z-[1] overflow-hidden">
           <motion.p
             animate={{ x: ["0%", "-50%"] }}
             transition={{ duration: 24, ease: "linear", repeat: Infinity }}
@@ -253,6 +260,27 @@ export default function AboutPage() {
         </div>
       </section>
 
+      <section className="relative overflow-hidden border-b border-border bg-background">
+        <div className="relative h-[70vh] max-h-[560px] min-h-[360px] w-full">
+          <Image
+            src="/images/digital-space.jpg"
+            alt="The studio's digital production desk — dual monitors, MIDI keyboard, and pad controller lit in red"
+            fill
+            sizes="100vw"
+            className="object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-background via-background/10 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 mx-auto flex w-full max-w-6xl flex-col gap-1 px-6 pb-10">
+            <span className="text-xs font-medium tracking-[0.2em] text-[var(--amber-glow)] uppercase">
+              The digital space
+            </span>
+            <p className="max-w-md text-sm text-muted-foreground sm:text-base">
+              Where sessions get mixed, mastered, and finished.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section className="border-b border-border bg-background">
         <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-x-12 gap-y-16 px-6 py-24 sm:grid-cols-2">
           <Reveal className="relative flex flex-col gap-4">
@@ -290,26 +318,7 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="border-b border-border bg-card">
-        <Reveal className="mx-auto flex w-full max-w-4xl flex-col items-center gap-5 px-6 py-24 text-center">
-          <span className="text-xs font-medium tracking-[0.2em] text-[var(--amber-glow)] uppercase">
-            Take a look inside
-          </span>
-          <div className="bg-grain relative flex aspect-video w-full max-w-2xl items-center justify-center overflow-hidden rounded-none border border-border bg-background">
-            <div className="relative z-[1] flex flex-col items-center gap-3">
-              <div className="flex size-14 items-center justify-center rounded-none border border-[var(--amber-glow)]/50 bg-[var(--amber-glow)]/10">
-                <Play className="size-5 text-[var(--amber-glow)]" aria-hidden="true" />
-              </div>
-              <p className="font-heading text-lg font-medium text-foreground">
-                Studio walkthrough — coming soon
-              </p>
-              <p className="max-w-xs text-xs text-muted-foreground">
-                A full video tour, shot by the owner, is on the way.
-              </p>
-            </div>
-          </div>
-        </Reveal>
-      </section>
+      <BehindTheScenes />
 
       <section className="bg-background">
         <Reveal className="mx-auto flex w-full max-w-4xl flex-col items-start gap-4 px-6 py-20">
