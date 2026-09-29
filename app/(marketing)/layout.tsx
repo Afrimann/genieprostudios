@@ -1,5 +1,6 @@
 import { SiteHeader } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
+import { BrandToggleBar } from "@/components/layout/brand-toggle-bar";
 
 // Route group (no URL segment of its own) covering every public-facing page
 // — home, about, services, work, gallery, contact, book, dashboard,
@@ -27,6 +28,7 @@ export const instant = false;
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
+      <BrandToggleBar />
       <SiteHeader />
       {/* flex-1 (body is flex flex-col, app/layout.tsx) makes this grow to
           fill any leftover viewport height on short pages, pushing

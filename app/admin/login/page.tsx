@@ -22,7 +22,7 @@ export default function AdminLoginPage() {
           GPS Control Room
         </span>
       </div>
-
+        
       <Card className="relative z-[1] w-full max-w-md border-[var(--amber-glow)]/20">
         <CardHeader>
           <CardTitle className="text-2xl">Admin sign in</CardTitle>

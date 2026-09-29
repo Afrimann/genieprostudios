@@ -262,3 +262,41 @@ export async function sendOwnerNewSupportMessageEmail(params: {
     html,
   });
 }
+
+/**
+ * Owner notification fired from triumph-actions.ts's submitProjectRequestAction()
+ * whenever a visitor submits the Triumph Music Global "Start a Project" form —
+ * best-effort, same discipline as every other email here.
+ */
+export async function sendOwnerNewProjectRequestEmail(params: {
+  ownerEmail: string;
+  fullName: string;
+  email: string;
+  country: string;
+  phone: string;
+  numberOfSongs: number;
+  serviceLabel: string;
+  projectDetails: string;
+}): Promise<SendEmailResult> {
+  const { ownerEmail, fullName, email, country, phone, numberOfSongs, serviceLabel, projectDetails } =
+    params;
+
+  const html = `
+    <h2>New Triumph Music Global project request</h2>
+    <p><strong>${fullName}</strong> (${email}) submitted a project request.</p>
+    <ul>
+      <li><strong>Country:</strong> ${country}</li>
+      <li><strong>Phone:</strong> ${phone}</li>
+      <li><strong>Number of songs:</strong> ${numberOfSongs}</li>
+      <li><strong>Service:</strong> ${serviceLabel}</li>
+    </ul>
+    <p><strong>Project details:</strong></p>
+    <blockquote style="margin:0;padding-left:12px;border-left:3px solid #ccc;">${projectDetails}</blockquote>
+  `.trim();
+
+  return sendEmail({
+    to: ownerEmail,
+    subject: `Triumph Music Global: new project request from ${fullName}`,
+    html,
+  });
+}

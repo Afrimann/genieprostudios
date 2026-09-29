@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 // new Date() is an "unstable value" under cacheComponents — fine to compute
@@ -31,9 +32,19 @@ export async function SiteFooter() {
   return (
     <footer className="border-t border-[var(--amber-glow)]/30 bg-background">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-10 sm:flex-row sm:items-center sm:justify-between">
-        <p className="font-heading text-sm font-medium text-foreground">
-          Genie Pro Studios
-        </p>
+        <Link href="/" className="flex items-center gap-2" aria-label="Genie Pro Studios">
+          <Image
+            src="/images/logo.png"
+            alt=""
+            width={28}
+            height={28}
+            style={{ height: "auto" }}
+            className="rounded-md"
+          />
+          <span className="font-heading text-sm font-medium text-foreground">
+            Genie Pro Studios
+          </span>
+        </Link>
 
         <nav className="flex flex-wrap gap-x-5 gap-y-2">
           {FOOTER_LINKS.map((link) => (

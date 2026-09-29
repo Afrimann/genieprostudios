@@ -13,6 +13,8 @@ type NavItem = { href: string; label: string };
 interface MobileNavProps {
   navItems: NavItem[];
   authLinks: ReactNode;
+  ctaLabel: string;
+  ctaHref: string;
 }
 
 const linkClassName =
@@ -63,7 +65,7 @@ function NavLinksWithPathname({
   return <NavLinks navItems={navItems} activePathname={pathname} onNavigate={onNavigate} />;
 }
 
-export function MobileNav({ navItems, authLinks }: MobileNavProps) {
+export function MobileNav({ navItems, authLinks, ctaLabel, ctaHref }: MobileNavProps) {
   const [open, setOpen] = useState(false);
 
   // Any navigation (link click, or the browser/back-forward changing the
@@ -109,7 +111,7 @@ export function MobileNav({ navItems, authLinks }: MobileNavProps) {
                   className="h-10 flex-1 rounded-none bg-[var(--amber-glow)] text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
                   onClick={close}
                 >
-                  <Link href="/book">Book a session</Link>
+                  <Link href={ctaHref}>{ctaLabel}</Link>
                 </Button>
                 {authLinks}
               </div>
