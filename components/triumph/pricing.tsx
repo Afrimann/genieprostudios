@@ -72,13 +72,12 @@ export function TriumphPricing() {
               }`}
             >
               {tier.featured && (
-                <motion.span
-                  animate={{ opacity: [1, 0.6, 1] }}
-                  transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }}
-                  className="w-fit bg-[#22e6c8] px-2 py-0.5 text-[10px] font-medium tracking-wide text-[#04211c] uppercase"
+                <span
+                  className="animate-opacity-pulse w-fit bg-[#22e6c8] px-2 py-0.5 text-[10px] font-medium tracking-wide text-[#04211c] uppercase"
+                  style={{ animationDuration: "1.8s" }}
                 >
                   Most popular
-                </motion.span>
+                </span>
               )}
 
               <div className="flex items-end gap-1" aria-hidden="true">

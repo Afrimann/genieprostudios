@@ -10,23 +10,24 @@ import { BrandGlow } from "@/components/triumph/brand-glow";
 // DecorativeRings (itself borrowed from components/home/hero.tsx) — reused
 // a third time here around the photo placeholder rather than the logo,
 // tying the page's "crazy" moments together without repeating the exact
-// same combination twice.
+// same combination twice. Plain CSS animation (globals.css's
+// spin-cw/spin-ccw), not framer-motion — see hero.tsx's DecorativeRings for
+// why (a JS/rAF loop that never pauses is what caused real mobile scroll
+// jank, 2026-09-30).
 function PhotoRings() {
   const rings = [
-    { inset: -12, opacity: 0.45, dash: "2 12", duration: 80, dir: 1 },
-    { inset: -22, opacity: 0.22, dash: "1 8", duration: 60, dir: -1 },
+    { inset: -12, opacity: 0.45, dash: "2 12", duration: 80, spin: "animate-spin-cw" },
+    { inset: -22, opacity: 0.22, dash: "1 8", duration: 60, spin: "animate-spin-ccw" },
   ];
 
   return (
     <>
       {rings.map((ring, i) => (
-        <motion.div
+        <div
           key={i}
           aria-hidden="true"
-          className="pointer-events-none absolute rounded-full border border-dashed border-[#22e6c8]"
-          style={{ inset: ring.inset, opacity: ring.opacity }}
-          animate={{ rotate: 360 * ring.dir }}
-          transition={{ duration: ring.duration, repeat: Infinity, ease: "linear" }}
+          className={`pointer-events-none absolute rounded-full border border-dashed border-[#22e6c8] ${ring.spin}`}
+          style={{ inset: ring.inset, opacity: ring.opacity, animationDuration: `${ring.duration}s` }}
         />
       ))}
     </>

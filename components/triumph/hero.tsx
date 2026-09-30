@@ -9,11 +9,14 @@ import { BrandGlow } from "@/components/triumph/brand-glow";
 
 // Decorative rings orbiting the logo — same ring-motif mechanism as
 // components/home/hero.tsx's DecorativeRings, reused here around the real
-// logo mark instead of a thumbnail cluster.
+// logo mark instead of a thumbnail cluster. Plain CSS animation (not
+// framer-motion's animate()) — see globals.css's spin-cw/spin-ccw comment
+// for why: this loops forever regardless of scroll position, and a JS/rAF
+// loop for that is exactly what compounded into real mobile scroll jank.
 function DecorativeRings() {
   const rings = [
-    { radius: 48, opacity: 0.45, dash: "1 14", duration: 90, dir: 1 },
-    { radius: 44, opacity: 0.25, dash: "3 10", duration: 70, dir: -1 },
+    { radius: 48, opacity: 0.45, dash: "1 14", duration: 90, spin: "animate-spin-cw" },
+    { radius: 44, opacity: 0.25, dash: "3 10", duration: 70, spin: "animate-spin-ccw" },
   ];
 
   return (
@@ -23,7 +26,7 @@ function DecorativeRings() {
       className="pointer-events-none absolute inset-[-18%] h-[136%] w-[136%]"
     >
       {rings.map((ring, i) => (
-        <motion.circle
+        <circle
           key={i}
           cx="50"
           cy="50"
@@ -32,32 +35,30 @@ function DecorativeRings() {
           stroke="#22e6c8"
           strokeWidth={0.5}
           strokeDasharray={ring.dash}
-          style={{ opacity: ring.opacity }}
-          animate={{ rotate: 360 * ring.dir }}
-          transition={{ duration: ring.duration, repeat: Infinity, ease: "linear" }}
+          className={`origin-center ${ring.spin}`}
+          style={{ opacity: ring.opacity, animationDuration: `${ring.duration}s` }}
         />
       ))}
     </svg>
   );
 }
 
-// Same staggered-bar VU meter as home/hero.tsx's LiveMeter.
+// Same staggered-bar VU meter as home/hero.tsx's LiveMeter, as a CSS
+// animation (see globals.css's meter-pulse) rather than framer-motion.
 function LiveMeter() {
   const bars = [0.9, 1.3, 1.05, 1.4, 0.95];
 
   return (
     <span className="inline-flex items-end gap-[3px]" aria-hidden="true">
       {bars.map((mult, i) => (
-        <motion.span
+        <span
           key={i}
-          className="w-[3px] rounded-none bg-[#22e6c8]"
-          initial={{ height: 4 }}
-          animate={{ height: [4, 14 * mult, 4] }}
-          transition={{
-            duration: 0.9 + i * 0.15,
-            repeat: Infinity,
-            ease: "easeInOut",
-            delay: i * 0.1,
+          className="animate-meter-pulse w-[3px] rounded-none bg-[#22e6c8]"
+          style={{
+            height: 4,
+            animationDuration: `${0.9 + i * 0.15}s`,
+            animationDelay: `${i * 0.1}s`,
+            ["--meter-bar-height" as string]: `${14 * mult}px`,
           }}
         />
       ))}

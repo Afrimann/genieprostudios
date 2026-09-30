@@ -195,3 +195,88 @@
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
+
+/* Pure-CSS replacements for the Triumph page's continuously-looping decor
+   (ring rotation, VU-meter pulse, marquee scroll, icon bob) — these
+   previously ran via framer-motion's animate() (a JS/rAF-driven loop that
+   never pauses, even off-screen), which was fine on desktop but compounded
+   with this page's several BrandGlow blur blobs into real scroll jank on
+   mobile (2026-09-30, reported: "dragging on mobile, fine on desktop").
+   CSS keyframe animations run on the compositor thread, independent of the
+   main thread's scroll/JS work, which is what actually fixes this — moving
+   the same visual effect off the framer-motion runtime is the point, not
+   just a stylistic swap. */
+@keyframes spin-cw {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spin-ccw {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes marquee-x {
+  from {
+    transform: translateX(0%);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes meter-pulse {
+  0%,
+  100% {
+    height: 4px;
+  }
+  50% {
+    height: var(--meter-bar-height, 14px);
+  }
+}
+
+@keyframes bob-y {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-spin-cw {
+  animation: spin-cw linear infinite;
+}
+
+.animate-spin-ccw {
+  animation: spin-ccw linear infinite;
+}
+
+.animate-marquee-x {
+  animation: marquee-x linear infinite;
+}
+
+.animate-meter-pulse {
+  animation: meter-pulse ease-in-out infinite;
+}
+
+.animate-bob-y {
+  animation: bob-y ease-in-out infinite;
+}
+
+@keyframes opacity-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.animate-opacity-pulse {
+  animation: opacity-pulse ease-in-out infinite;
+}

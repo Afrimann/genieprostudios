@@ -95,13 +95,12 @@ export function TriumphStartProjectForm() {
       <BrandGlow />
       <Reveal className="relative z-[1] mx-auto grid w-full max-w-6xl grid-cols-1 gap-12 px-6 py-24 lg:grid-cols-[0.85fr_1.15fr] lg:items-start lg:gap-16">
         <div className="flex flex-col gap-6">
-          <motion.div
-            animate={{ y: [0, -4, 0] }}
-            transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
-            className="flex size-9 items-center justify-center rounded-none border border-[#22e6c8]/50 bg-[#22e6c8]/10"
+          <div
+            className="animate-bob-y flex size-9 items-center justify-center rounded-none border border-[#22e6c8]/50 bg-[#22e6c8]/10"
+            style={{ animationDuration: "1.6s" }}
           >
             <Send className="size-4 text-[#22e6c8]" aria-hidden="true" />
-          </motion.div>
+          </div>
           <div className="flex flex-col gap-3">
             <span className="text-xs font-medium tracking-[0.2em] text-[#22e6c8] uppercase">
               Start your project
