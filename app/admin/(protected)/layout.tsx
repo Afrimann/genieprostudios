@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
@@ -27,6 +28,16 @@ import { AdminShell } from "@/components/admin/admin-shell";
 // Always needs a live session + profile check, so it can never be
 // meaningfully prerendered — opt out of Cache Components' static-shell validation.
 export const instant = false;
+
+// Owner-only control room — noindex covers every /admin/* route nested
+// under this (protected) group (dashboard, availability, bookings,
+// bookings/[id], portfolio, support, support/[id]) without repeating this
+// on each page. /admin/login is a sibling outside this group and gets its
+// own metadata separately.
+export const metadata: Metadata = {
+  title: "Admin",
+  robots: { index: false, follow: false },
+};
 
 export default async function AdminLayout({
   children,

@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { Radio } from "lucide-react";
 
 import { LoginForm } from "@/components/auth/login-form";
@@ -13,6 +14,11 @@ import {
 // admin sign-in, gated by app/admin/layout.tsx checking profiles.is_admin.
 // Not linked from any public page/nav. Redirects to /admin (the dashboard
 // home) rather than /admin/availability now that a dashboard exists.
+export const metadata: Metadata = {
+  title: "Admin Sign In",
+  robots: { index: false, follow: false },
+};
+
 export default function AdminLoginPage() {
   return (
     <main className="bg-grain relative flex min-h-screen flex-col items-center justify-center gap-8 p-6">

@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { getActiveServices, type Service } from "@/lib/repositories/service-repository";
@@ -118,6 +119,14 @@ function ServicesFallback() {
     </div>
   );
 }
+
+export const metadata: Metadata = {
+  title: "Services & Pricing",
+  description:
+    "Every recording, rehearsal, livestream, and mixing & mastering package — priced up front. Pick a session and book online.",
+  alternates: { canonical: "/services" },
+  openGraph: { url: "/services" },
+};
 
 export default function ServicesPage() {
   return (

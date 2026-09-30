@@ -1,7 +1,13 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { SignUpForm } from "@/components/auth/sign-up-form";
 
 type SignUpSearchParams = Promise<{ redirect?: string; reason?: string }>;
+
+export const metadata: Metadata = {
+  title: "Sign Up",
+  robots: { index: false, follow: false },
+};
 
 async function SignUpContent({ searchParams }: { searchParams: SignUpSearchParams }) {
   const { redirect, reason } = await searchParams;

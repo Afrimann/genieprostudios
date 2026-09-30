@@ -12,6 +12,7 @@ import {
   sendAutoCancelOwnerEmail,
   sendBalanceReminderEmail,
 } from "@/lib/services/email-service";
+import { SITE_URL } from "@/lib/utils/site-url";
 
 // Business logic + orchestration for the Phase 4 daily sweep. Called only
 // from app/api/cron/daily-sweep/route.ts (service-role context — no user
@@ -58,7 +59,7 @@ export async function runBalanceReminderSweep(): Promise<SweepResult> {
         sessionDate: booking.sessionDate,
         sessionStartTime: booking.sessionStartTime,
         balanceRemainingKobo,
-        siteUrl: process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
+        siteUrl: SITE_URL,
       });
 
       if (!result.success) {

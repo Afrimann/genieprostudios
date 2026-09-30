@@ -1,5 +1,6 @@
 
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
@@ -13,6 +14,41 @@ import { Badge } from "@/components/ui/badge";
 // treatment under cacheComponents (AGENTS.md fix #1), same as the /work
 // grid but with a param on top.
 export const instant = false;
+
+// Per-entry title/description/OG image — falls back to generic /work copy
+// if the entry doesn't exist (stale/unpublished link) rather than throwing,
+// same "not found isn't an error" stance as WorkDetailContent below.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const entry = await getPortfolioEntryById(id);
+
+  if (!entry) {
+    return {
+      title: "Work",
+      alternates: { canonical: `/work/${id}` },
+    };
+  }
+
+  const thumbnailUrl = resolveThumbnailUrl(entry.platform, entry.video_id_or_url, entry.thumbnail_url);
+  const description =
+    entry.description ?? `${PORTFOLIO_CATEGORY_LABELS[entry.category]} by Genie Pro Studios.`;
+
+  return {
+    title: entry.title,
+    description,
+    alternates: { canonical: `/work/${id}` },
+    openGraph: {
+      url: `/work/${id}`,
+      title: entry.title,
+      description,
+      images: thumbnailUrl ? [{ url: thumbnailUrl }] : undefined,
+    },
+  };
+}
 
 async function WorkDetailContent({ id }: { id: string }) {
   const entry = await getPortfolioEntryById(id);

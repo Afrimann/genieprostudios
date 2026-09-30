@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 
 import { Hero } from "@/components/home/hero";
 import { FeaturedSession } from "@/components/home/featured-session";
@@ -46,6 +47,18 @@ function SessionsReelFallback() {
     </section>
   );
 }
+
+// No `title` here deliberately — the root layout's title.default
+// ("GenieProStudios — Recording, Rehearsal & Production Sessions") is meant
+// for exactly this page; setting a string title here would instead run it
+// through the title template ("X | GenieProStudios"), which is the wrong
+// shape for the homepage itself.
+export const metadata: Metadata = {
+  description:
+    "Recording, rehearsal, and production sessions for gospel artists — built for artists who want the finished sound and the finished footage in one booking.",
+  alternates: { canonical: "/" },
+  openGraph: { url: "/" },
+};
 
 export default function Home() {
   return (

@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 const STUDIO_GUIDELINES = [
   "A minimum 70% deposit is required to secure a booking; the remaining balance is due before studio access, no later than 24 hours before your session start time. Paying in full at booking is also accepted.",
   "Prices are fixed and non-negotiable.",
@@ -18,6 +20,14 @@ const PROJECT_MANAGEMENT_TERMS = [
   "Genie Pro takes 10% of distribution/publishing royalties, but only if the song or project was produced or mixed by them, unless otherwise agreed.",
   "Genie Pro reserves the right to use session content for advertising and promotion of their brand and work.",
 ];
+
+export const metadata: Metadata = {
+  title: "Terms & Conditions",
+  description:
+    "Studio policies, booking terms, deposits, rescheduling, and project management terms for Genie Pro Studios.",
+  alternates: { canonical: "/terms" },
+  openGraph: { url: "/terms" },
+};
 
 export default function TermsPage() {
   return (

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { SupportMessage, SupportTicket } from "@/lib/repositories/support-repository";
 import { sendOwnerNewSupportMessageEmail } from "@/lib/services/email-service";
+import { SITE_URL } from "@/lib/utils/site-url";
 
 // Business-logic layer for the "front desk" support chat — thin wrappers
 // around the SECURITY DEFINER RPCs in 0021_support_tickets.sql, same
@@ -125,7 +126,7 @@ export async function sendTicketMessage(ticketId: string, body: string): Promise
           ? await supabase.from("profiles").select("full_name, email").eq("id", customerId).maybeSingle()
           : { data: null };
 
-        const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+        const siteUrl = SITE_URL;
 
         await sendOwnerNewSupportMessageEmail({
           ownerEmail,

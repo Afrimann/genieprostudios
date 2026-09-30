@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { getPublishedPortfolioEntries } from "@/lib/repositories/portfolio-repository";
@@ -41,6 +42,14 @@ function WorkFallback() {
     </div>
   );
 }
+
+export const metadata: Metadata = {
+  title: "Our Work",
+  description:
+    "A look at sessions we've recorded, mixed, and shot for gospel artists — browse recordings, livestreams, and produced sessions.",
+  alternates: { canonical: "/work" },
+  openGraph: { url: "/work" },
+};
 
 export default function WorkPage() {
   return (

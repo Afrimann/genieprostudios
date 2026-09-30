@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 const SECTIONS = [
   {
     title: "1. What we collect",
@@ -24,6 +26,13 @@ const SECTIONS = [
     body: "Questions about this policy or your data go to the studio directly — see the Contact page for current details.",
   },
 ];
+
+export const metadata: Metadata = {
+  title: "Privacy Policy",
+  description: "How Genie Pro Studios collects, uses, and protects your personal data.",
+  alternates: { canonical: "/privacy" },
+  openGraph: { url: "/privacy" },
+};
 
 export default function PrivacyPage() {
   return (

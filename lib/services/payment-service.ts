@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Booking, BookingStatus } from "@/lib/services/booking-service";
 import { confirmPaymentByReference } from "@/lib/services/payment-confirmation-service";
+import { SITE_URL } from "@/lib/utils/site-url";
 
 // The three payment choices surfaced to the customer, per project-notes.md's
 // deposit model correction: "minimum" and "full" are only ever offered as
@@ -277,7 +278,7 @@ export async function initializePayment(
         email,
         amount: resolved.amountKobo,
         reference,
-        callback_url: `${process.env.NEXT_PUBLIC_SITE_URL}/book/confirmation`,
+        callback_url: `${SITE_URL}/book/confirmation`,
       }),
     });
   } catch {

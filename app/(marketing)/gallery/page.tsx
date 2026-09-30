@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 // TODO(client): real studio photography pending — these six spots are the
@@ -11,6 +12,14 @@ const GALLERY_SPOTS = [
   "Outboard gear",
   "Lounge area",
 ];
+
+export const metadata: Metadata = {
+  title: "Studio Gallery",
+  description:
+    "A look inside Genie Pro Studios — control room, live room, vocal booth, mixing desk, and more.",
+  alternates: { canonical: "/gallery" },
+  openGraph: { url: "/gallery" },
+};
 
 export default function GalleryPage() {
   return (

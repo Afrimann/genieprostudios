@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { getCurrentUser } from "@/lib/auth/current-user";
@@ -40,6 +41,14 @@ async function FrontDeskCard() {
     </div>
   );
 }
+
+export const metadata: Metadata = {
+  title: "Contact & Booking",
+  description:
+    "Booking is the fastest way to reach Genie Pro Studios — pick a service and a time, or message the front desk with a question.",
+  alternates: { canonical: "/contact" },
+  openGraph: { url: "/contact" },
+};
 
 export default function ContactPage() {
   return (
