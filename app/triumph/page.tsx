@@ -17,7 +17,12 @@ import { TriumphStartProjectForm } from "@/components/triumph/start-project-form
 // this fully replaces them for /triumph, same as how app/opengraph-image.tsx
 // is overridden by the sibling app/triumph/opengraph-image.tsx.
 export const metadata: Metadata = {
-  title: "Triumph Music Global — Mixing & Mastering",
+  // `{ absolute: ... }` rather than a plain string — a plain string still
+  // runs through the root layout's title template ("%s | GenieProStudios"),
+  // which is exactly the "inherits the main site's defaults" this page is
+  // supposed to avoid. Confirmed live: without `absolute`, the browser tab
+  // showed "Triumph Music Global — Mixing & Mastering | GenieProStudios".
+  title: { absolute: "Triumph Music Global — Mixing & Mastering" },
   description:
     "Mixing and mastering built for the moment your song needs to land — clean, balanced, radio-ready masters for artists anywhere in the world.",
   keywords: [
