@@ -300,3 +300,100 @@ export async function sendOwnerNewProjectRequestEmail(params: {
     html,
   });
 }
+
+/**
+ * Client-facing confirmation fired alongside sendOwnerNewProjectRequestEmail
+ * — belt-and-suspenders alongside the inline on-screen code shown by
+ * start-project-form.tsx's success state, since the project_code is the
+ * client's only way back into their project (no account/password, see
+ * 0023_triumph_projects.sql). Links to the plain /triumph/track lookup page,
+ * never a pre-filled URL — the code is shown as text, the email itself is
+ * never put in a URL.
+ */
+export async function sendClientProjectConfirmationEmail(params: {
+  clientEmail: string;
+  fullName: string;
+  projectCode: string;
+  serviceLabel: string;
+  siteUrl: string;
+}): Promise<SendEmailResult> {
+  const { clientEmail, fullName, projectCode, serviceLabel, siteUrl } = params;
+  const trackUrl = `${siteUrl}/triumph/track`;
+
+  const html = `
+    <h2>We've got your project</h2>
+    <p>Hi ${fullName || "there"},</p>
+    <p>Thanks for submitting your <strong>${serviceLabel}</strong> request to Triumph Music Global. We'll be in touch within 24 hours.</p>
+    <p>Your project code is:</p>
+    <p style="font-size:20px;font-weight:bold;letter-spacing:1px;">${projectCode}</p>
+    <p>Save this — you can check your project's status anytime at <a href="${trackUrl}">${trackUrl}</a> using this code and the email address you submitted with.</p>
+  `.trim();
+
+  return sendEmail({
+    to: clientEmail,
+    subject: `Your Triumph Music Global project code: ${projectCode}`,
+    html,
+  });
+}
+
+/**
+ * Client-facing notice fired from triumph-admin-actions.ts's
+ * postTriumphProjectUpdateAction() whenever the engineer's update actually
+ * changes the project's status (never for a status-less note) — best-effort,
+ * same discipline as every other email here.
+ */
+export async function sendClientProjectUpdateEmail(params: {
+  clientEmail: string;
+  fullName: string;
+  projectCode: string;
+  statusLabel: string;
+  body: string;
+  siteUrl: string;
+}): Promise<SendEmailResult> {
+  const { clientEmail, fullName, projectCode, statusLabel, body, siteUrl } = params;
+  const trackUrl = `${siteUrl}/triumph/track`;
+
+  const html = `
+    <h2>Your project status has been updated</h2>
+    <p>Hi ${fullName || "there"},</p>
+    <p>Your project <strong>${projectCode}</strong> is now: <strong>${statusLabel}</strong>.</p>
+    <blockquote style="margin:0;padding-left:12px;border-left:3px solid #ccc;">${body}</blockquote>
+    <p>Check the full details anytime at <a href="${trackUrl}">${trackUrl}</a>.</p>
+  `.trim();
+
+  return sendEmail({
+    to: clientEmail,
+    subject: `Update on your project ${projectCode}: ${statusLabel}`,
+    html,
+  });
+}
+
+/**
+ * Fired from triumph-download-verification-actions.ts's
+ * requestDownloadVerificationCodeAction() — confirms the client currently
+ * controls the email on file before they can download a deliverable (see
+ * lib/services/triumph-email-verification.ts). Best-effort, same
+ * discipline as every other email here.
+ */
+export async function sendDownloadVerificationCodeEmail(params: {
+  clientEmail: string;
+  fullName: string;
+  projectCode: string;
+  code: string;
+}): Promise<SendEmailResult> {
+  const { clientEmail, fullName, projectCode, code } = params;
+
+  const html = `
+    <h2>Verify it's you</h2>
+    <p>Hi ${fullName || "there"},</p>
+    <p>Use this code to confirm it's you before downloading files from your project <strong>${projectCode}</strong>:</p>
+    <p style="font-size:28px;font-weight:bold;letter-spacing:4px;">${code}</p>
+    <p>This code expires in about 10 minutes. If you didn't request this, you can ignore this email.</p>
+  `.trim();
+
+  return sendEmail({
+    to: clientEmail,
+    subject: `Your verification code: ${code}`,
+    html,
+  });
+}

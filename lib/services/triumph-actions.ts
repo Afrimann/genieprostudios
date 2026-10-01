@@ -1,17 +1,25 @@
 "use server";
 
 // Server Action boundary for Triumph Music Global's "Start a Project" form.
-// No DB table for v1 — this is email-only (best-effort owner notification),
-// consistent with keeping scope minimal until the client wants a persisted
-// request history (a natural follow-up mirroring support_tickets, not built
-// now). Re-validates with the same schema the client form already used —
-// never trust client-side validation alone for a Server Action boundary.
+// Persists a triumph_projects row and hands the client a project_code (the
+// "Project ID" the client later uses on /triumph/track to check status) —
+// see 0023_triumph_projects.sql. Persistence is now primary; email is
+// best-effort on top. Re-validates with the same schema the client form
+// already used — never trust client-side validation alone for a Server
+// Action boundary.
 
 import { triumphProjectRequestSchema } from "@/lib/validation/triumph-project";
 import { TRIUMPH_PRICING_TIERS } from "@/lib/data/triumph-pricing";
-import { sendOwnerNewProjectRequestEmail } from "@/lib/services/email-service";
+import { createTriumphProject } from "@/lib/repositories/triumph-projects-repository";
+import {
+  sendOwnerNewProjectRequestEmail,
+  sendClientProjectConfirmationEmail,
+} from "@/lib/services/email-service";
+import { SITE_URL } from "@/lib/utils/site-url";
 
-export type SubmitProjectRequestResult = { success: true } | { success: false; message: string };
+export type SubmitProjectRequestResult =
+  | { success: true; projectCode: string }
+  | { success: false; message: string };
 
 export async function submitProjectRequestAction(input: unknown): Promise<SubmitProjectRequestResult> {
   const parsed = triumphProjectRequestSchema.safeParse(input);
@@ -20,30 +28,66 @@ export async function submitProjectRequestAction(input: unknown): Promise<Submit
     return { success: false, message: "Please check the form for errors and try again." };
   }
 
-  const ownerEmail = process.env.OWNER_NOTIFICATION_EMAIL;
-
-  if (!ownerEmail) {
-    console.warn("submitProjectRequestAction: OWNER_NOTIFICATION_EMAIL is not configured, skipping email");
-    return { success: false, message: "Something went wrong. Please try again later." };
-  }
-
   const { fullName, email, country, phone, numberOfSongs, serviceId, projectDetails } = parsed.data;
   const serviceLabel = TRIUMPH_PRICING_TIERS.find((tier) => tier.id === serviceId)?.name ?? serviceId;
 
-  const result = await sendOwnerNewProjectRequestEmail({
-    ownerEmail,
-    fullName,
-    email,
-    country,
-    phone,
-    numberOfSongs,
-    serviceLabel,
-    projectDetails,
-  });
+  let projectCode: string;
 
-  if (!result.success) {
-    return { success: false, message: "Something went wrong sending your request. Please try again." };
+  try {
+    const project = await createTriumphProject({
+      fullName,
+      email,
+      country,
+      phone,
+      numberOfSongs,
+      serviceId,
+      projectDetails,
+    });
+    projectCode = project.project_code;
+  } catch (err) {
+    // The DB insert is the primary outcome now (the client's only way back
+    // into their project is the code it produces) — fail the whole action
+    // rather than letting an email-only "success" promise a code that
+    // doesn't exist anywhere.
+    console.error("submitProjectRequestAction: failed to create triumph_projects row", err);
+    return { success: false, message: "Something went wrong. Please try again." };
   }
 
-  return { success: true };
+  // Both emails are best-effort — neither failing changes the result
+  // already returned above, since the project row (and its code) exists
+  // either way.
+  const ownerEmail = process.env.OWNER_NOTIFICATION_EMAIL;
+
+  if (ownerEmail) {
+    const ownerResult = await sendOwnerNewProjectRequestEmail({
+      ownerEmail,
+      fullName,
+      email,
+      country,
+      phone,
+      numberOfSongs,
+      serviceLabel,
+      projectDetails,
+    });
+
+    if (!ownerResult.success) {
+      console.warn(`submitProjectRequestAction: owner email failed for ${projectCode}: ${ownerResult.message}`);
+    }
+  } else {
+    console.warn("submitProjectRequestAction: OWNER_NOTIFICATION_EMAIL is not configured, skipping owner email");
+  }
+
+  const clientResult = await sendClientProjectConfirmationEmail({
+    clientEmail: email,
+    fullName,
+    projectCode,
+    serviceLabel,
+    siteUrl: SITE_URL,
+  });
+
+  if (!clientResult.success) {
+    console.warn(`submitProjectRequestAction: client confirmation email failed for ${projectCode}: ${clientResult.message}`);
+  }
+
+  return { success: true, projectCode };
 }

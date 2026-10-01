@@ -1,4 +1,3 @@
-import { BrandToggleBar } from "@/components/layout/brand-toggle-bar";
 import { TriumphHeader } from "@/components/layout/triumph-header";
 import { TriumphFooter } from "@/components/layout/triumph-footer";
 
@@ -7,14 +6,15 @@ import { TriumphFooter } from "@/components/layout/triumph-footer";
 // in that group, and a nested layout can't "un-render" an ancestor's
 // chrome, so Triumph Music Global (its own nav/CTA/wordmark, no
 // booking/auth icons) needs to be a sibling with its own layout rather than
-// a page nested under (marketing). See the brand-toggle-bar.tsx comment for
-// why this stays real <Link> navigation rather than client-side brand state.
+// a page nested under (marketing). Cross-site navigation (2026-10-xx):
+// the old BrandToggleBar nav affordance was removed per client request in
+// favor of real marketing content (components/home/triumph-teaser.tsx) —
+// TriumphFooter now carries the only link back to the main site.
 export const instant = false;
 
 export default function TriumphLayout({ children }: { children: React.ReactNode }) {
   return (
     <>
-      <BrandToggleBar />
       <TriumphHeader />
       <div className="flex flex-1 flex-col">{children}</div>
       <TriumphFooter />

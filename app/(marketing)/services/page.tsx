@@ -13,6 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { TriumphTeaser } from "@/components/home/triumph-teaser";
 
 // Public marketing page — static shell + dynamic data via Suspense, per
 // AGENTS.md fix #2 (mirrors app/sign-up/page.tsx). No instant=false here:
@@ -83,7 +84,7 @@ async function ServicesContent() {
                     <CardTitle>{service.label}</CardTitle>
                     <CardDescription>
                       {service.is_addon
-                        ? "Priced per song"
+                        ? "Priced per song · handled remotely, no studio time needed"
                         : `${service.duration_hours} hour${service.duration_hours === 1 ? "" : "s"}`}
                     </CardDescription>
                   </CardHeader>
@@ -91,9 +92,22 @@ async function ServicesContent() {
                     <p className="text-lg font-semibold">{formatKobo(service.price_kobo)}</p>
                   </CardContent>
                   <CardFooter>
-                    <Button asChild className="w-full">
-                      <Link href={`/book?service=${service.id}`}>Book this</Link>
-                    </Button>
+                    {service.is_addon ? (
+                      // No studio time required — this is Triumph Music
+                      // Global's territory (remote mixing/mastering), not
+                      // the room-booking flow, so send the request there
+                      // instead of into /book.
+                      <Button
+                        asChild
+                        className="w-full bg-[#22e6c8] text-[#0b0712] hover:bg-[#1cc9ae]"
+                      >
+                        <Link href="/triumph#start-project">Send a request to Triumph</Link>
+                      </Button>
+                    ) : (
+                      <Button asChild className="w-full">
+                        <Link href={`/book?service=${service.id}`}>Book this</Link>
+                      </Button>
+                    )}
                   </CardFooter>
                 </Card>
               ))}
@@ -152,6 +166,8 @@ export default function ServicesPage() {
           </Suspense>
         </div>
       </section>
+
+      <TriumphTeaser />
     </main>
   );
 }

@@ -15,3 +15,13 @@ export const triumphProjectRequestSchema = z.object({
 });
 
 export type TriumphProjectRequestInput = z.infer<typeof triumphProjectRequestSchema>;
+
+// "Find Your Project" lookup — Project Code + email, no password. Code is
+// uppercased and email lower-cased by the caller (triumph-tracking-actions.ts)
+// before querying, not here, so this schema only enforces "non-empty."
+export const triumphProjectLookupSchema = z.object({
+  projectCode: z.string().trim().min(1, "Please enter your project code"),
+  email: z.string().trim().min(1, "Please enter your email").email("Please enter a valid email address"),
+});
+
+export type TriumphProjectLookupInput = z.infer<typeof triumphProjectLookupSchema>;

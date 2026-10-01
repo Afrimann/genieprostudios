@@ -6,6 +6,7 @@ import { FeaturedSession } from "@/components/home/featured-session";
 import { AboutTeaser } from "@/components/home/about-teaser";
 import { MissionMarquee } from "@/components/home/mission-marquee";
 import { ServicesTeaser } from "@/components/home/services-teaser";
+import { TriumphTeaser } from "@/components/home/triumph-teaser";
 import { SessionsReel } from "@/components/home/sessions-reel";
 import { TestimonialsTeaser } from "@/components/home/testimonials-teaser";
 import { ContactTeaser } from "@/components/home/contact-teaser";
@@ -72,6 +73,7 @@ export default function Home() {
       <Suspense fallback={<ServicesTeaserFallback />}>
         <ServicesTeaser />
       </Suspense>
+      <TriumphTeaser />
       <Suspense fallback={<SessionsReelFallback />}>
         <SessionsReel />
       </Suspense>

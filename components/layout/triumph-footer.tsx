@@ -13,6 +13,11 @@ const FOOTER_LINKS = [
   { href: "#pricing", label: "Services" },
   { href: "#portfolio", label: "Portfolio" },
   { href: "#start-project", label: "Start a Project" },
+  // The old BrandToggleBar (removed) was the only way back to the main
+  // site — this is the replacement, a plain footer link rather than a
+  // persistent nav toggle (matches earlier feedback that the toggle was
+  // "too obvious" for a secondary affordance).
+  { href: "/", label: "Genie Pro Studios" },
 ];
 
 // Social links deliberately omitted — no real Instagram/WhatsApp/etc handles

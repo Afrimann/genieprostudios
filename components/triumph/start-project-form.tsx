@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import { Send, CheckCircle2 } from "lucide-react";
 
 import {
@@ -54,7 +55,7 @@ const trustItem = {
 };
 
 export function TriumphStartProjectForm() {
-  const [submitted, setSubmitted] = useState(false);
+  const [projectCode, setProjectCode] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
@@ -74,10 +75,10 @@ export function TriumphStartProjectForm() {
       return;
     }
 
-    setSubmitted(true);
+    setProjectCode(result.projectCode);
   }
 
-  if (submitted) {
+  if (projectCode) {
     return (
       <section id="start-project" className="scroll-mt-16 border-b border-border bg-card">
         <Reveal className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-6 py-24 text-center">
@@ -85,6 +86,19 @@ export function TriumphStartProjectForm() {
           <p className="text-sm text-muted-foreground">
             Thanks — we&apos;ll get back to you within 24 hours.
           </p>
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <span className="text-xs tracking-[0.2em] text-muted-foreground uppercase">
+              Your project code
+            </span>
+            <span className="font-heading text-xl font-medium text-[#22e6c8]">{projectCode}</span>
+            <p className="max-w-sm text-xs text-muted-foreground">
+              Save this — we&apos;ve also emailed it to you. Use it with your email anytime at{" "}
+              <Link href="/triumph/track" className="underline underline-offset-4 hover:text-[#22e6c8]">
+                /triumph/track
+              </Link>{" "}
+              to check your status.
+            </p>
+          </div>
         </Reveal>
       </section>
     );
