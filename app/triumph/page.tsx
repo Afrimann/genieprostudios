@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { absoluteUrl } from "@/lib/utils/site-url";
 import { TriumphHero } from "@/components/triumph/hero";
 import { TriumphMarquee } from "@/components/triumph/marquee";
+import { TriumphArtists } from "@/components/triumph/artists";
 import { TriumphWhy } from "@/components/triumph/why-triumph";
 import { TriumphPortfolioTeaser } from "@/components/triumph/portfolio-teaser";
 import { TriumphPricing } from "@/components/triumph/pricing";
@@ -85,6 +86,7 @@ export default function TriumphPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(TRIUMPH_JSON_LD) }}
       />
       <TriumphHero />
+      <TriumphArtists />
       <TriumphMarquee />
       <TriumphWhy />
       <TriumphPricing />

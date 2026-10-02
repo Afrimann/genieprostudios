@@ -17,9 +17,13 @@ export function MissionMarquee() {
 
   return (
     <section className="relative border-t border-border bg-card py-14">
+      {/* audioSrc points at a licensed instrumental bed, not the clip's own
+          audio — the video stays muted; this replaces it entirely so the
+          toggle below never plays whatever stage-glow.mp4 was shot with. */}
       <AmbientVideo
         src="/videos/stage-glow.mp4"
         poster="/videos/posters/stage-glow.jpg"
+        audioSrc="/audio/mission-theme.mp3"
         overlayClassName="bg-background/80"
       />
       <Reveal

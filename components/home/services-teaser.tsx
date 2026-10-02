@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import { getActiveServices } from "@/lib/repositories/service-repository";
 import { formatKobo } from "@/lib/utils/money";
+import { CATEGORY_LABELS } from "@/lib/data/service-categories";
 import { Reveal } from "@/components/ui/reveal";
 
 // Horizontal scroll-snap row of "rack units" — each category reads like a
@@ -57,7 +58,9 @@ export async function ServicesTeaser() {
                 ))}
               </div>
               <div className="flex flex-col gap-1">
-                <p className="text-sm font-medium text-foreground">{entry.category}</p>
+                <p className="text-sm font-medium text-foreground">
+                  {CATEGORY_LABELS[entry.category] ?? entry.category}
+                </p>
                 <p className="text-xs text-muted-foreground">
                   from {formatKobo(entry.fromKobo)}
                 </p>
