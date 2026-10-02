@@ -8,6 +8,7 @@ import { TriumphArtists } from "@/components/triumph/artists";
 import { TriumphWhy } from "@/components/triumph/why-triumph";
 import { TriumphPortfolioTeaser } from "@/components/triumph/portfolio-teaser";
 import { TriumphPricing } from "@/components/triumph/pricing";
+import { TriumphTestimonials } from "@/components/triumph/testimonials";
 import { TriumphBio } from "@/components/triumph/bio";
 import { TriumphStartProjectForm } from "@/components/triumph/start-project-form";
 
@@ -93,6 +94,7 @@ export default function TriumphPage() {
       <Suspense fallback={<PortfolioFallback />}>
         <TriumphPortfolioTeaser />
       </Suspense>
+      <TriumphTestimonials />
       <TriumphBio />
       <TriumphStartProjectForm />
     </main>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
@@ -39,6 +39,26 @@ const HERO_VARIANTS: HeroVariant[] = [
 
 const ROTATE_MS = 6000;
 
+// useSyncExternalStore, not useState+useEffect — this is exactly the case
+// React built it for: a value (window width) that only exists on the
+// client, where the server has no opinion. getServerSnapshot's `false`
+// becomes the hydration baseline, and React reconciles the real value after
+// mount without the "client's first render already disagreed with the
+// server HTML" mismatch that useState(() => window...) produced.
+function subscribeToDesktopQuery(callback: () => void) {
+  const mql = window.matchMedia("(min-width: 768px)");
+  mql.addEventListener("change", callback);
+  return () => mql.removeEventListener("change", callback);
+}
+
+function getDesktopQuerySnapshot() {
+  return window.matchMedia("(min-width: 768px)").matches;
+}
+
+function getDesktopQueryServerSnapshot() {
+  return false;
+}
+
 // Plain two-panel split rather than a glow/gradient-heavy background — a
 // solid dark text panel next to a full-bleed photo of the studio's
 // production desk, which rotates on a timer (photo framing + accent color)
@@ -47,19 +67,12 @@ const ROTATE_MS = 6000;
 // polling, no reason to keep ticking a slide show nobody's looking at.
 export function TriumphHero() {
   const [index, setIndex] = useState(0);
-  const [isDesktop, setIsDesktop] = useState(
-    () => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches,
+  const isDesktop = useSyncExternalStore(
+    subscribeToDesktopQuery,
+    getDesktopQuerySnapshot,
+    getDesktopQueryServerSnapshot,
   );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    const mql = window.matchMedia("(min-width: 768px)");
-    function handleChange(e: MediaQueryListEvent) {
-      setIsDesktop(e.matches);
-    }
-    mql.addEventListener("change", handleChange);
-    return () => mql.removeEventListener("change", handleChange);
-  }, []);
 
   useEffect(() => {
     function tick() {
