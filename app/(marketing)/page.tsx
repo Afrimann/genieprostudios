@@ -9,6 +9,7 @@ import { ServicesTeaser } from "@/components/home/services-teaser";
 import { TriumphTeaser } from "@/components/home/triumph-teaser";
 import { SessionsReel } from "@/components/home/sessions-reel";
 import { TestimonialsTeaser } from "@/components/home/testimonials-teaser";
+import { RecordLabelTeaser } from "@/components/home/record-label-teaser";
 import { ContactTeaser } from "@/components/home/contact-teaser";
 
 // ServicesTeaser/FeaturedSession/SessionsReel all read from Supabase (via
@@ -78,6 +79,7 @@ export default function Home() {
         <SessionsReel />
       </Suspense>
       <TestimonialsTeaser />
+      <RecordLabelTeaser />
       <ContactTeaser />
     </main>
   );

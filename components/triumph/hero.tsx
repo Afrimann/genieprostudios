@@ -80,45 +80,55 @@ const item = {
   },
 };
 
-// Original copy, not a copy of the reference site's own sentences — only
-// the section's role/layout is modeled after gospelsoundclinic.studio's
-// hero: single-column, centered text with a graphic above the headline.
-// Here that graphic is the real Triumph Music Global logo, ringed with the
-// site's DecorativeRings motif, over a soft blue/teal brand-glow background
-// (see brand-glow.tsx) rather than a flat solid section background.
+// The studio's own digital production desk (same asset as the About page's
+// "digital space" band) as the hero's background — real footage rather than
+// another flat/glow-only section, now that the page has one. Left-weighted
+// gradient over it (dark where the text sits, opening up to reveal the photo
+// on the right) replaces the old fully-centered layout: text reads as its
+// own column against a solid dark field, the photo does the "atmosphere"
+// work the old BrandGlow-only background was carrying alone.
 export function TriumphHero() {
   return (
-    <section className="relative overflow-hidden border-b border-border bg-background">
-      <BrandGlow />
+    <section className="relative flex min-h-[640px] items-center overflow-hidden border-b border-border bg-background sm:min-h-[760px]">
+      <Image
+        src="/images/digital-space.jpg"
+        alt="Triumph Music Global's production desk — dual monitors, MIDI keyboard, and pad controller lit in red"
+        fill
+        priority
+        sizes="100vw"
+        className="object-cover"
+      />
+      <div className="absolute inset-0 bg-gradient-to-r from-background from-35% via-background/85 via-60% to-background/10" />
+      <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-background/40" />
+      <BrandGlow variant="reverse" className="opacity-70" />
+
       <motion.div
         variants={container}
         initial="hidden"
         animate="show"
-        className="relative z-[1] mx-auto flex w-full max-w-3xl flex-col items-center gap-6 px-6 py-24 text-center md:py-32"
+        className="relative z-[1] mx-auto flex w-full max-w-6xl flex-col items-start gap-6 px-6 py-24 md:py-32"
       >
-        <motion.div variants={item} className="relative flex items-center justify-center py-4">
-          <DecorativeRings />
-          <Image
-            src="/images/triumph-logo-mark.png"
-            alt="Triumph Music Global"
-            width={150}
-            height={84}
-            priority
-            className="relative z-[1] h-10 w-auto rounded-lg bg-white p-1.5 shadow-[0_0_40px_rgba(34,230,200,0.25)] sm:h-12"
-          />
+        <motion.div variants={item} className="relative flex items-center gap-3">
+          <div className="relative flex items-center justify-center">
+            <DecorativeRings />
+            <Image
+              src="/images/triumph-logo-mark.png"
+              alt="Triumph Music Global"
+              width={150}
+              height={84}
+              priority
+              className="relative z-[1] h-10 w-auto rounded-lg bg-white p-1.5 shadow-[0_0_40px_rgba(34,230,200,0.25)] sm:h-12"
+            />
+          </div>
+          <span className="inline-flex items-center gap-2.5 text-xs font-medium tracking-[0.2em] text-[#22e6c8] uppercase">
+            …built for great sound
+            <LiveMeter />
+          </span>
         </motion.div>
-
-        <motion.span
-          variants={item}
-          className="inline-flex items-center gap-2.5 text-xs font-medium tracking-[0.2em] text-[#22e6c8] uppercase"
-        >
-          …built for great sound
-          <LiveMeter />
-        </motion.span>
 
         <motion.h1
           variants={item}
-          className="font-heading text-5xl leading-[1.05] font-medium tracking-tight text-foreground sm:text-6xl"
+          className="max-w-2xl font-heading text-5xl leading-[1.05] font-medium tracking-tight text-foreground sm:text-6xl"
         >
           Mixing &amp; mastering, built for the moment your song needs to land.
         </motion.h1>
@@ -131,7 +141,7 @@ export function TriumphHero() {
           radio-ready, wherever it&apos;s played.
         </motion.p>
 
-        <motion.div variants={item} className="flex flex-wrap items-center justify-center gap-4 pt-2">
+        <motion.div variants={item} className="flex flex-wrap items-center gap-4 pt-2">
           <Button
             asChild
             size="lg"
