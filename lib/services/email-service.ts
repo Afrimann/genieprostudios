@@ -27,21 +27,31 @@ function getResendClient(): Resend | null {
   return new Resend(apiKey);
 }
 
-function getFromAddress(): string {
-  // Falls back to Resend's own sandbox sender if unset, so a missing env var
-  // doesn't itself become the failure reason once RESEND_API_KEY is present.
-  return process.env.RESEND_FROM_EMAIL || "GenieProStudios <onboarding@resend.dev>";
+/**
+ * Builds the From header for a given display name, reusing whatever address
+ * RESEND_FROM_EMAIL (or its sandbox fallback) resolves to — Triumph Music
+ * Global and GenieProStudios currently share one Resend account/domain, so
+ * only the display name changes per sender, never the underlying address.
+ */
+function getFromAddress(senderName: string = "GenieProStudios"): string {
+  const configured = process.env.RESEND_FROM_EMAIL || "GenieProStudios <onboarding@resend.dev>";
+  const match = configured.match(/<(.+)>/);
+  const address = match ? match[1] : configured;
+  return `${senderName} <${address}>`;
 }
 
 /**
  * Shared send path: every exported function below builds its own subject +
  * HTML body and delegates here. Never throws — Resend SDK/network failures
- * are caught and mapped to { success: false }.
+ * are caught and mapped to { success: false }. `fromName` overrides the
+ * sender display name (e.g. "Triumph Music Global") while keeping the same
+ * underlying address — see getFromAddress().
  */
 async function sendEmail(params: {
   to: string;
   subject: string;
   html: string;
+  fromName?: string;
 }): Promise<SendEmailResult> {
   const resend = getResendClient();
 
@@ -54,7 +64,7 @@ async function sendEmail(params: {
 
   try {
     const { error } = await resend.emails.send({
-      from: getFromAddress(),
+      from: getFromAddress(params.fromName),
       to: params.to,
       subject: params.subject,
       html: params.html,
@@ -298,6 +308,7 @@ export async function sendOwnerNewProjectRequestEmail(params: {
     to: ownerEmail,
     subject: `Triumph Music Global: new project request from ${fullName}`,
     html,
+    fromName: "Triumph Music Global",
   });
 }
 
@@ -333,6 +344,7 @@ export async function sendClientProjectConfirmationEmail(params: {
     to: clientEmail,
     subject: `Your Triumph Music Global project code: ${projectCode}`,
     html,
+    fromName: "Triumph Music Global",
   });
 }
 
@@ -365,6 +377,7 @@ export async function sendClientProjectUpdateEmail(params: {
     to: clientEmail,
     subject: `Update on your project ${projectCode}: ${statusLabel}`,
     html,
+    fromName: "Triumph Music Global",
   });
 }
 
@@ -395,5 +408,6 @@ export async function sendDownloadVerificationCodeEmail(params: {
     to: clientEmail,
     subject: `Your verification code: ${code}`,
     html,
+    fromName: "Triumph Music Global",
   });
 }
