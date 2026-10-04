@@ -23,6 +23,11 @@ export function formatKobo(amountKobo: KoboAmount): string {
   return `₦${rounded.toLocaleString("en-NG")}`;
 }
 
+/** Converts a plain naira number (e.g. from a form input) to an integer kobo amount for storage. */
+export function nairaToKobo(naira: number): number {
+  return Math.round(naira * 100);
+}
+
 /** Converts a kobo amount to a plain naira number (no formatting). */
 export function koboToNaira(amountKobo: KoboAmount): number {
   const asNumber =

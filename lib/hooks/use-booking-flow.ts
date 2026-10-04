@@ -411,6 +411,53 @@ export function useBookingFlow(initialServiceId?: string) {
     setStep("service");
   }
 
+  /**
+   * Full reset to a fresh flow — every selection, every loaded list, every
+   * error, and the created booking itself.
+   *
+   * Distinct from backToService() above, which only rewinds `step` and
+   * deliberately keeps the customer's picks so they can step forward again
+   * without re-choosing. That's right for a "back" button and wrong for a
+   * cancel: after cancelling, the booking row no longer exists, so holding
+   * on to `booking`/`addonBookingId` would leave the UI referencing a
+   * record that's gone (2026-10-04 bug — cancelling from the summary step
+   * left the whole form populated, because CancelBookingButton's
+   * router.push("/book") can't remount a client component already mounted
+   * on /book).
+   *
+   * `services` is intentionally NOT cleared: it's the static catalogue, not
+   * a user selection, and refetching it would flash an avoidable loading
+   * state on the very step we're returning to.
+   */
+  function resetFlow() {
+    setStep("service");
+
+    setSelectedService(null);
+
+    setOpenDates([]);
+    setDatesLoading(false);
+    setDatesError(null);
+    setSelectedDate(null);
+
+    setWindows([]);
+    setWindowsLoading(false);
+    setWindowsError(null);
+    setSelectedWindow(null);
+
+    setStartTimeOptions([]);
+    setStartTimesLoading(false);
+    setStartTimesError(null);
+
+    setBooking(null);
+    setBookingError(null);
+    setBookingSubmitting(false);
+
+    setAddonBookingId(null);
+    setAddonCustomerId(null);
+    setSongStatuses([]);
+    setSongErrorMessages([]);
+  }
+
   function backToDate() {
     setStep("date");
     setSelectedWindow(null);
@@ -494,6 +541,7 @@ export function useBookingFlow(initialServiceId?: string) {
     startTimesError,
     selectStartTime,
     backToWindow,
+    resetFlow,
 
     bookingSubmitting,
     bookingError,

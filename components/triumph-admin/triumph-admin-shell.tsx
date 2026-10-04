@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, LogOut, Music4 } from "lucide-react";
+import { LayoutDashboard, LogOut, Music4, Wallet } from "lucide-react";
 
 import { signOut } from "@/lib/services/auth-service";
 
@@ -18,11 +18,28 @@ import { signOut } from "@/lib/services/auth-service";
 // decoration) — this is a daily-use work tool, not a marketing surface,
 // and the teal accent is reserved for the active nav item only so it
 // still reads as meaningful rather than decorative.
-const NAV_ITEMS = [{ href: "/triumph-admin", label: "Projects", icon: LayoutDashboard }] as const;
+const NAV_ITEMS = [
+  { href: "/triumph-admin", label: "Projects", icon: LayoutDashboard },
+  { href: "/triumph-admin/revenue", label: "Revenue", icon: Wallet },
+] as const;
 
 interface TriumphAdminShellProps {
   adminEmail: string;
   children: React.ReactNode;
+}
+
+// "/triumph-admin" is both the Projects nav item's own href AND a prefix of
+// every other item's href (/triumph-admin/revenue, etc.) — a plain
+// pathname?.startsWith(item.href) check would make Projects stay
+// highlighted on every other page too. Projects' own "subtree" is just
+// itself plus /triumph-admin/projects/[id]; every other item matches
+// exact-or-prefix against its own href like before.
+function isNavItemActive(pathname: string | null, href: string): boolean {
+  if (!pathname) return false;
+  if (href === "/triumph-admin") {
+    return pathname === href || pathname.startsWith("/triumph-admin/projects/");
+  }
+  return pathname === href || pathname.startsWith(`${href}/`);
 }
 
 export function TriumphAdminShell({ adminEmail, children }: TriumphAdminShellProps) {
@@ -47,7 +64,7 @@ export function TriumphAdminShell({ adminEmail, children }: TriumphAdminShellPro
 
         <nav className="flex flex-1 flex-col gap-0.5 px-3 py-4">
           {NAV_ITEMS.map((item) => {
-            const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`);
+            const isActive = isNavItemActive(pathname, item.href);
             const Icon = item.icon;
 
             return (

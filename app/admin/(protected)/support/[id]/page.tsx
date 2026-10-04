@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { getTicketForAdmin, getTicketMessagesForAdmin } from "@/lib/repositories/admin-support-repository";
 import { Badge } from "@/components/ui/badge";
 import { TicketThread } from "@/components/support/ticket-thread";
+import { RealtimeRefresher } from "@/components/admin/realtime-refresher";
 
 // Same reasoning as every other admin page — behind the live session+admin
 // check in app/admin/(protected)/layout.tsx, can never be meaningfully prerendered.
@@ -53,6 +54,10 @@ export default async function AdminSupportTicketPage({ params }: { params: Promi
 
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6 sm:p-8">
+      <RealtimeRefresher
+        channelName={`admin-support-ticket-${id}`}
+        tables={[{ table: "support_tickets", filter: `id=eq.${id}` }]}
+      />
       <Link
         href="/admin/support"
         className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"

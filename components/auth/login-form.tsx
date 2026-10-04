@@ -9,6 +9,7 @@ import { Mail, Lock } from "lucide-react";
 
 import { loginSchema, type LoginInput } from "@/lib/validation/auth";
 import { login } from "@/lib/services/auth-service";
+import { safeRedirectPath } from "@/lib/utils/safe-redirect";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,7 +47,9 @@ export function LoginForm({ redirectTo, reason }: LoginFormProps) {
       return;
     }
 
-    router.push(redirectTo || "/dashboard");
+    // Never push `redirectTo` raw — it comes straight from a URL search
+    // param an attacker controls. See lib/utils/safe-redirect.ts.
+    router.push(safeRedirectPath(redirectTo));
   }
 
   return (

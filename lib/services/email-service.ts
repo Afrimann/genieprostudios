@@ -1,14 +1,28 @@
 import { Resend } from "resend";
 
 import { formatKobo } from "@/lib/utils/money";
+import { GENIE_PRO_BRAND, TRIUMPH_BRAND } from "@/lib/email/brand";
+import { escapeHtml, escapeHtmlMultiline } from "@/lib/email/escape-html";
+import {
+  renderEmailLayout,
+  eyebrow,
+  heading,
+  paragraph,
+  detailTable,
+  calloutBox,
+  codeBlock,
+  ctaButton,
+} from "@/lib/email/layout";
 
-// Thin wrapper around Resend for the four Phase 4 transactional emails
-// (owner new-booking notice, customer balance reminder, auto-cancel notice
-// to both parties). Plain HTML template strings, no react-email dependency,
-// per the spec for this phase. None of these functions ever throw — a
-// failed/unsent email must never abort a DB state transition (marking a
-// booking auto_cancelled, etc.) or cause a Paystack webhook to return a
-// non-2xx — so every path returns a typed result instead.
+// Thin wrapper around Resend for every transactional email this project
+// sends (GenieProStudios booking lifecycle + support, Triumph Music Global
+// project lifecycle). Every email body is built from lib/email/layout.ts's
+// shared template shell plus the GenieProStudios or Triumph brand config in
+// lib/email/brand.ts — no ad-hoc inline HTML per email anymore. None of
+// these functions ever throw — a failed/unsent email must never abort a DB
+// state transition (marking a booking auto_cancelled, etc.) or cause a
+// Paystack webhook to return a non-2xx — so every path returns a typed
+// result instead.
 
 export type SendEmailResult = { success: true } | { success: false; message: string };
 
@@ -85,7 +99,7 @@ async function sendEmail(params: {
   }
 }
 
-/** Common "date at time" line used across all four templates below. */
+/** Common "date at time" line used across several templates below. */
 function formatSessionLine(sessionDate: string, sessionStartTime: string, sessionEndTime?: string): string {
   return sessionEndTime
     ? `${sessionDate}, ${sessionStartTime}–${sessionEndTime}`
@@ -123,21 +137,136 @@ export async function sendOwnerNewBookingEmail(params: {
     status,
   } = params;
 
-  const html = `
-    <h2>New booking received</h2>
-    <p><strong>${customerName}</strong> (${customerEmail}) has paid for a session.</p>
-    <ul>
-      <li><strong>Service:</strong> ${serviceLabel}</li>
-      <li><strong>Session:</strong> ${formatSessionLine(sessionDate, sessionStartTime, sessionEndTime)}</li>
-      <li><strong>Amount paid so far:</strong> ${formatKobo(amountPaidKobo)} of ${formatKobo(totalPriceKobo)}</li>
-      <li><strong>Booking status:</strong> ${status}</li>
-    </ul>
-  `.trim();
+  const brand = GENIE_PRO_BRAND;
+  const bodyHtml =
+    eyebrow("New booking", brand) +
+    heading("You've got a new booking", brand) +
+    paragraph(`<strong>${escapeHtml(customerName)}</strong> (${escapeHtml(customerEmail)}) has paid for a session.`) +
+    detailTable([
+      { label: "Service", value: serviceLabel },
+      { label: "Session", value: formatSessionLine(sessionDate, sessionStartTime, sessionEndTime) },
+      { label: "Amount paid", value: `${formatKobo(amountPaidKobo)} of ${formatKobo(totalPriceKobo)}` },
+      { label: "Status", value: status },
+    ]);
 
   return sendEmail({
     to: ownerEmail,
     subject: `New booking: ${serviceLabel} — ${sessionDate}`,
-    html,
+    html: renderEmailLayout(brand, { previewText: `${customerName} has paid for a session.`, bodyHtml }),
+  });
+}
+
+/**
+ * Customer-facing counterpart to sendOwnerNewBookingEmail — fired alongside
+ * it from the same chokepoint, payment-confirmation-service.ts's
+ * confirmPaymentByReference(), the first time a booking receives a
+ * successful payment (pending_deposit -> deposited or paid_in_full).
+ * `status` branches the copy/CTA: a deposit still owes a balance (so it
+ * shows what's left and the pay-later deadline), a full payment doesn't.
+ */
+export async function sendCustomerBookingConfirmedEmail(params: {
+  customerEmail: string;
+  customerName: string;
+  serviceLabel: string;
+  sessionDate: string;
+  sessionStartTime: string;
+  sessionEndTime: string;
+  amountPaidKobo: number;
+  totalPriceKobo: number;
+  status: "deposited" | "paid_in_full";
+  siteUrl: string;
+}): Promise<SendEmailResult> {
+  const {
+    customerEmail,
+    customerName,
+    serviceLabel,
+    sessionDate,
+    sessionStartTime,
+    sessionEndTime,
+    amountPaidKobo,
+    totalPriceKobo,
+    status,
+    siteUrl,
+  } = params;
+
+  const dashboardUrl = `${siteUrl}/dashboard`;
+  const remainingKobo = totalPriceKobo - amountPaidKobo;
+  const isFull = status === "paid_in_full";
+
+  const brand = GENIE_PRO_BRAND;
+  const bodyHtml =
+    eyebrow("Booking confirmed", brand) +
+    heading(isFull ? "You're all set — paid in full" : "Your booking is confirmed", brand) +
+    paragraph(`Hi ${escapeHtml(customerName || "there")},`) +
+    paragraph(
+      isFull
+        ? `Your <strong>${escapeHtml(serviceLabel)}</strong> session is confirmed and paid in full.`
+        : `Your <strong>${escapeHtml(serviceLabel)}</strong> session is confirmed — your deposit has been received.`,
+    ) +
+    detailTable([
+      { label: "Service", value: serviceLabel },
+      { label: "Session", value: formatSessionLine(sessionDate, sessionStartTime, sessionEndTime) },
+      { label: "Amount paid", value: formatKobo(amountPaidKobo) },
+      ...(isFull ? [] : [{ label: "Balance remaining", value: formatKobo(remainingKobo) }]),
+    ]) +
+    (isFull
+      ? paragraph("No further payment is needed — we'll see you at your session.")
+      : paragraph("Please settle the remaining balance at least 24 hours before your session to avoid automatic cancellation.")) +
+    ctaButton(dashboardUrl, "View your booking", brand);
+
+  return sendEmail({
+    to: customerEmail,
+    subject: isFull
+      ? `Booking confirmed — paid in full: ${serviceLabel}`
+      : `Booking confirmed: ${serviceLabel} — ${sessionDate}`,
+    html: renderEmailLayout(brand, {
+      previewText: isFull ? "Your booking is confirmed and paid in full." : "Your booking is confirmed.",
+      bodyHtml,
+    }),
+  });
+}
+
+/**
+ * Customer-facing confirmation that the remaining balance on a previously
+ * deposited booking has now been paid — fired from the same
+ * confirmPaymentByReference() chokepoint as the two functions above, only
+ * on a deposited -> paid_in_full transition (a deposit was already on
+ * file, this is the balance landing after it, not the first payment).
+ */
+export async function sendCustomerBalancePaidEmail(params: {
+  customerEmail: string;
+  customerName: string;
+  serviceLabel: string;
+  sessionDate: string;
+  sessionStartTime: string;
+  sessionEndTime: string;
+  totalPriceKobo: number;
+  siteUrl: string;
+}): Promise<SendEmailResult> {
+  const { customerEmail, customerName, serviceLabel, sessionDate, sessionStartTime, sessionEndTime, totalPriceKobo, siteUrl } =
+    params;
+
+  const dashboardUrl = `${siteUrl}/dashboard`;
+  const brand = GENIE_PRO_BRAND;
+  const bodyHtml =
+    eyebrow("Balance received", brand) +
+    heading("You're paid in full", brand) +
+    paragraph(`Hi ${escapeHtml(customerName || "there")},`) +
+    paragraph(
+      `We've received your remaining balance for <strong>${escapeHtml(serviceLabel)}</strong> — your booking is now paid in full.`,
+    ) +
+    detailTable([
+      { label: "Service", value: serviceLabel },
+      { label: "Session", value: formatSessionLine(sessionDate, sessionStartTime, sessionEndTime) },
+      { label: "Total paid", value: formatKobo(totalPriceKobo) },
+    ]) +
+    paragraph("No further payment is needed — we'll see you at your session.") +
+    ctaButton(dashboardUrl, "View your booking", brand);
+
+  return sendEmail({
+    to: customerEmail,
+    subject: `Balance received — paid in full: ${serviceLabel}`,
+    html: renderEmailLayout(brand, { previewText: "Your remaining balance has been received.", bodyHtml }),
   });
 }
 
@@ -161,22 +290,22 @@ export async function sendBalanceReminderEmail(params: {
     params;
 
   const dashboardUrl = `${siteUrl}/dashboard`;
-
-  const html = `
-    <h2>Your balance is due</h2>
-    <p>Hi ${customerName || "there"},</p>
-    <p>
-      You have a remaining balance of <strong>${formatKobo(balanceRemainingKobo)}</strong> for your
-      <strong>${serviceLabel}</strong> session on <strong>${formatSessionLine(sessionDate, sessionStartTime)}</strong>.
-    </p>
-    <p>Please settle this at least 24 hours before your session to avoid automatic cancellation.</p>
-    <p><a href="${dashboardUrl}">Pay your balance</a></p>
-  `.trim();
+  const brand = GENIE_PRO_BRAND;
+  const bodyHtml =
+    eyebrow("Balance due", brand) +
+    heading("Your balance is due", brand) +
+    paragraph(`Hi ${escapeHtml(customerName || "there")},`) +
+    paragraph(
+      `You have a remaining balance of <strong>${formatKobo(balanceRemainingKobo)}</strong> for your ` +
+        `<strong>${escapeHtml(serviceLabel)}</strong> session on <strong>${formatSessionLine(sessionDate, sessionStartTime)}</strong>.`,
+    ) +
+    paragraph("Please settle this at least 24 hours before your session to avoid automatic cancellation.") +
+    ctaButton(dashboardUrl, "Pay your balance", brand);
 
   return sendEmail({
     to: customerEmail,
     subject: `Balance due: ${serviceLabel} — ${sessionDate}`,
-    html,
+    html: renderEmailLayout(brand, { previewText: "Your remaining balance is due.", bodyHtml }),
   });
 }
 
@@ -196,21 +325,22 @@ export async function sendAutoCancelCustomerEmail(params: {
 }): Promise<SendEmailResult> {
   const { customerEmail, customerName, serviceLabel, sessionDate, sessionStartTime } = params;
 
-  const html = `
-    <h2>Your booking has been cancelled</h2>
-    <p>Hi ${customerName || "there"},</p>
-    <p>
-      Your <strong>${serviceLabel}</strong> session on
-      <strong>${formatSessionLine(sessionDate, sessionStartTime)}</strong> has been automatically cancelled
-      because the remaining balance was not paid at least 24 hours before the session.
-    </p>
-    <p>If you'd still like to book, please make a new booking on our site.</p>
-  `.trim();
+  const brand = GENIE_PRO_BRAND;
+  const bodyHtml =
+    eyebrow("Booking cancelled", brand) +
+    heading("Your booking has been cancelled", brand) +
+    paragraph(`Hi ${escapeHtml(customerName || "there")},`) +
+    paragraph(
+      `Your <strong>${escapeHtml(serviceLabel)}</strong> session on ` +
+        `<strong>${formatSessionLine(sessionDate, sessionStartTime)}</strong> has been automatically cancelled ` +
+        `because the remaining balance was not paid at least 24 hours before the session.`,
+    ) +
+    paragraph("If you'd still like to book, please make a new booking on our site.");
 
   return sendEmail({
     to: customerEmail,
     subject: `Booking cancelled: ${serviceLabel} — ${sessionDate}`,
-    html,
+    html: renderEmailLayout(brand, { previewText: "Your booking has been automatically cancelled.", bodyHtml }),
   });
 }
 
@@ -228,19 +358,20 @@ export async function sendAutoCancelOwnerEmail(params: {
 }): Promise<SendEmailResult> {
   const { ownerEmail, customerName, serviceLabel, sessionDate, sessionStartTime } = params;
 
-  const html = `
-    <h2>Booking auto-cancelled (unpaid balance)</h2>
-    <p>
-      <strong>${customerName}</strong>'s <strong>${serviceLabel}</strong> session on
-      <strong>${formatSessionLine(sessionDate, sessionStartTime)}</strong> was automatically cancelled — the
-      remaining balance was not paid at least 24 hours before the session.
-    </p>
-  `.trim();
+  const brand = GENIE_PRO_BRAND;
+  const bodyHtml =
+    eyebrow("Auto-cancelled", brand) +
+    heading("Booking auto-cancelled (unpaid balance)", brand) +
+    paragraph(
+      `<strong>${escapeHtml(customerName)}</strong>'s <strong>${escapeHtml(serviceLabel)}</strong> session on ` +
+        `<strong>${formatSessionLine(sessionDate, sessionStartTime)}</strong> was automatically cancelled — the ` +
+        `remaining balance was not paid at least 24 hours before the session.`,
+    );
 
   return sendEmail({
     to: ownerEmail,
     subject: `Auto-cancelled: ${serviceLabel} — ${sessionDate}`,
-    html,
+    html: renderEmailLayout(brand, { previewText: "A booking was auto-cancelled for unpaid balance.", bodyHtml }),
   });
 }
 
@@ -259,17 +390,21 @@ export async function sendOwnerNewSupportMessageEmail(params: {
 }): Promise<SendEmailResult> {
   const { ownerEmail, customerName, customerEmail, subject, body, ticketUrl } = params;
 
-  const html = `
-    <h2>New message from the front desk chat</h2>
-    <p><strong>${customerName}</strong> (${customerEmail}) wrote in on: <strong>${subject}</strong></p>
-    <blockquote style="margin:0;padding-left:12px;border-left:3px solid #ccc;">${body}</blockquote>
-    <p><a href="${ticketUrl}">Reply in the admin dashboard</a></p>
-  `.trim();
+  const brand = GENIE_PRO_BRAND;
+  const bodyHtml =
+    eyebrow("Front desk", brand) +
+    heading("New message from the front desk chat", brand) +
+    paragraph(
+      `<strong>${escapeHtml(customerName)}</strong> (${escapeHtml(customerEmail)}) wrote in on: ` +
+        `<strong>${escapeHtml(subject)}</strong>`,
+    ) +
+    calloutBox(escapeHtmlMultiline(body), brand) +
+    ctaButton(ticketUrl, "Reply in the admin dashboard", brand);
 
   return sendEmail({
     to: ownerEmail,
     subject: `Front desk: ${customerName} — ${subject}`,
-    html,
+    html: renderEmailLayout(brand, { previewText: `${customerName} sent a new message.`, bodyHtml }),
   });
 }
 
@@ -291,23 +426,24 @@ export async function sendOwnerNewProjectRequestEmail(params: {
   const { ownerEmail, fullName, email, country, phone, numberOfSongs, serviceLabel, projectDetails } =
     params;
 
-  const html = `
-    <h2>New Triumph Music Global project request</h2>
-    <p><strong>${fullName}</strong> (${email}) submitted a project request.</p>
-    <ul>
-      <li><strong>Country:</strong> ${country}</li>
-      <li><strong>Phone:</strong> ${phone}</li>
-      <li><strong>Number of songs:</strong> ${numberOfSongs}</li>
-      <li><strong>Service:</strong> ${serviceLabel}</li>
-    </ul>
-    <p><strong>Project details:</strong></p>
-    <blockquote style="margin:0;padding-left:12px;border-left:3px solid #ccc;">${projectDetails}</blockquote>
-  `.trim();
+  const brand = TRIUMPH_BRAND;
+  const bodyHtml =
+    eyebrow("New project request", brand) +
+    heading("New Triumph Music Global project request", brand) +
+    paragraph(`<strong>${escapeHtml(fullName)}</strong> (${escapeHtml(email)}) submitted a project request.`) +
+    detailTable([
+      { label: "Country", value: escapeHtml(country) },
+      { label: "Phone", value: escapeHtml(phone) },
+      { label: "Number of songs", value: String(numberOfSongs) },
+      { label: "Service", value: serviceLabel },
+    ]) +
+    paragraph("<strong>Project details:</strong>") +
+    calloutBox(escapeHtmlMultiline(projectDetails), brand);
 
   return sendEmail({
     to: ownerEmail,
     subject: `Triumph Music Global: new project request from ${fullName}`,
-    html,
+    html: renderEmailLayout(brand, { previewText: `${fullName} submitted a new project request.`, bodyHtml }),
     fromName: "Triumph Music Global",
   });
 }
@@ -331,19 +467,24 @@ export async function sendClientProjectConfirmationEmail(params: {
   const { clientEmail, fullName, projectCode, serviceLabel, siteUrl } = params;
   const trackUrl = `${siteUrl}/triumph/track`;
 
-  const html = `
-    <h2>We've got your project</h2>
-    <p>Hi ${fullName || "there"},</p>
-    <p>Thanks for submitting your <strong>${serviceLabel}</strong> request to Triumph Music Global. We'll be in touch within 24 hours.</p>
-    <p>Your project code is:</p>
-    <p style="font-size:20px;font-weight:bold;letter-spacing:1px;">${projectCode}</p>
-    <p>Save this — you can check your project's status anytime at <a href="${trackUrl}">${trackUrl}</a> using this code and the email address you submitted with.</p>
-  `.trim();
+  const brand = TRIUMPH_BRAND;
+  const bodyHtml =
+    eyebrow("Project received", brand) +
+    heading("We've got your project", brand) +
+    paragraph(`Hi ${escapeHtml(fullName || "there")},`) +
+    paragraph(
+      `Thanks for submitting your <strong>${escapeHtml(serviceLabel)}</strong> request to Triumph Music Global. ` +
+        `We'll be in touch within 24 hours.`,
+    ) +
+    paragraph("Your project code is:") +
+    codeBlock(projectCode, brand) +
+    paragraph("Save this — you can check your project's status anytime using this code and the email address you submitted with.") +
+    ctaButton(trackUrl, "Check your project status", brand);
 
   return sendEmail({
     to: clientEmail,
     subject: `Your Triumph Music Global project code: ${projectCode}`,
-    html,
+    html: renderEmailLayout(brand, { previewText: `Your project code is ${projectCode}.`, bodyHtml }),
     fromName: "Triumph Music Global",
   });
 }
@@ -365,18 +506,19 @@ export async function sendClientProjectUpdateEmail(params: {
   const { clientEmail, fullName, projectCode, statusLabel, body, siteUrl } = params;
   const trackUrl = `${siteUrl}/triumph/track`;
 
-  const html = `
-    <h2>Your project status has been updated</h2>
-    <p>Hi ${fullName || "there"},</p>
-    <p>Your project <strong>${projectCode}</strong> is now: <strong>${statusLabel}</strong>.</p>
-    <blockquote style="margin:0;padding-left:12px;border-left:3px solid #ccc;">${body}</blockquote>
-    <p>Check the full details anytime at <a href="${trackUrl}">${trackUrl}</a>.</p>
-  `.trim();
+  const brand = TRIUMPH_BRAND;
+  const bodyHtml =
+    eyebrow("Project update", brand) +
+    heading("Your project status has been updated", brand) +
+    paragraph(`Hi ${escapeHtml(fullName || "there")},`) +
+    paragraph(`Your project <strong>${escapeHtml(projectCode)}</strong> is now: <strong>${escapeHtml(statusLabel)}</strong>.`) +
+    calloutBox(escapeHtmlMultiline(body), brand) +
+    ctaButton(trackUrl, "View your project", brand);
 
   return sendEmail({
     to: clientEmail,
     subject: `Update on your project ${projectCode}: ${statusLabel}`,
-    html,
+    html: renderEmailLayout(brand, { previewText: `Your project ${projectCode} is now ${statusLabel}.`, bodyHtml }),
     fromName: "Triumph Music Global",
   });
 }
@@ -396,18 +538,19 @@ export async function sendDownloadVerificationCodeEmail(params: {
 }): Promise<SendEmailResult> {
   const { clientEmail, fullName, projectCode, code } = params;
 
-  const html = `
-    <h2>Verify it's you</h2>
-    <p>Hi ${fullName || "there"},</p>
-    <p>Use this code to confirm it's you before downloading files from your project <strong>${projectCode}</strong>:</p>
-    <p style="font-size:28px;font-weight:bold;letter-spacing:4px;">${code}</p>
-    <p>This code expires in about 10 minutes. If you didn't request this, you can ignore this email.</p>
-  `.trim();
+  const brand = TRIUMPH_BRAND;
+  const bodyHtml =
+    eyebrow("Verify it's you", brand) +
+    heading("Verify it's you", brand) +
+    paragraph(`Hi ${escapeHtml(fullName || "there")},`) +
+    paragraph(`Use this code to confirm it's you before downloading files from your project <strong>${escapeHtml(projectCode)}</strong>:`) +
+    codeBlock(code, brand) +
+    paragraph("This code expires in about 10 minutes. If you didn't request this, you can ignore this email.");
 
   return sendEmail({
     to: clientEmail,
     subject: `Your verification code: ${code}`,
-    html,
+    html: renderEmailLayout(brand, { previewText: `Your verification code is ${code}.`, bodyHtml }),
     fromName: "Triumph Music Global",
   });
 }

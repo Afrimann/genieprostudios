@@ -17,6 +17,7 @@ import {
   PORTFOLIO_CATEGORY_LABELS,
   PORTFOLIO_PLATFORMS,
 } from "@/lib/validation/portfolio";
+import { useRealtimeRefresh } from "@/lib/hooks/use-realtime-refresh";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,6 +65,8 @@ const EMPTY_FORM: PortfolioFormValues = {
   published: false,
 };
 
+const PORTFOLIO_REALTIME_TABLES = [{ table: "portfolio_entries" }];
+
 export function PortfolioManager() {
   const [entries, setEntries] = useState<PortfolioEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,6 +106,12 @@ export function PortfolioManager() {
       loadEntries();
     });
   }, []);
+
+  useRealtimeRefresh({
+    channelName: "admin-portfolio",
+    tables: PORTFOLIO_REALTIME_TABLES,
+    onRefresh: loadEntries,
+  });
 
   function startEdit(entry: PortfolioEntry) {
     setEditingId(entry.id);

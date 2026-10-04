@@ -8,6 +8,9 @@ import {
 import { TRIUMPH_PRICING_TIERS } from "@/lib/data/triumph-pricing";
 import { TRIUMPH_PROJECT_STATUS_LABELS, type TriumphProjectStatus } from "@/lib/validation/triumph-update";
 import { TRIUMPH_PAYMENT_STATUS_LABELS } from "@/lib/validation/triumph-payment";
+import { RealtimeRefresher } from "@/components/admin/realtime-refresher";
+
+const TRIUMPH_DASHBOARD_REALTIME_TABLES = [{ table: "triumph_projects" }];
 
 // Behind app/triumph-admin/(protected)/layout.tsx's live session+admin
 // check — can never be meaningfully prerendered, same reasoning as every
@@ -40,6 +43,7 @@ export default async function TriumphAdminDashboardPage() {
 
   return (
     <div className="flex flex-col gap-8 p-6 sm:p-8">
+      <RealtimeRefresher channelName="triumph-admin-dashboard" tables={TRIUMPH_DASHBOARD_REALTIME_TABLES} />
       <div className="flex flex-col gap-1">
         <h1 className="font-heading text-2xl font-medium text-foreground">Projects</h1>
         <p className="text-sm text-muted-foreground">

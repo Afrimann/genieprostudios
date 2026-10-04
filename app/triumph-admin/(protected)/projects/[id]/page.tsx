@@ -8,6 +8,7 @@ import { TRIUMPH_PRICING_TIERS } from "@/lib/data/triumph-pricing";
 import { TRIUMPH_PROJECT_STATUS_LABELS, type TriumphProjectStatus } from "@/lib/validation/triumph-update";
 import { ProjectUpdateForm } from "@/components/triumph-admin/project-update-form";
 import { PaymentStatusToggle } from "@/components/triumph-admin/payment-status-toggle";
+import { RealtimeRefresher } from "@/components/admin/realtime-refresher";
 
 // Behind app/triumph-admin/(protected)/layout.tsx's live session+admin
 // check — can never be meaningfully prerendered, same reasoning as every
@@ -43,6 +44,13 @@ export default async function TriumphAdminProjectDetailPage({
 
   return (
     <div className="flex flex-col gap-8 p-6 sm:p-8">
+      <RealtimeRefresher
+        channelName={`triumph-admin-project-${id}`}
+        tables={[
+          { table: "triumph_projects", filter: `id=eq.${id}` },
+          { table: "triumph_project_updates", filter: `project_id=eq.${id}` },
+        ]}
+      />
       <div className="flex flex-col gap-1.5">
         <span className="font-mono text-xs text-muted-foreground">{project.project_code}</span>
         <h1 className="font-heading text-xl font-medium text-foreground">{project.full_name}</h1>

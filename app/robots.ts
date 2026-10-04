@@ -11,7 +11,24 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      disallow: ["/book", "/login", "/sign-up", "/dashboard", "/dashboard/", "/admin", "/admin/"],
+      disallow: [
+        "/book",
+        "/login",
+        "/sign-up",
+        "/dashboard",
+        "/dashboard/",
+        "/admin",
+        "/admin/",
+        // Added 2026-10-03 (audit finding V-8): these already carried
+        // `robots: { index: false }` metadata but were missing from this
+        // belt-and-suspenders list. /triumph/track URLs embed the
+        // TMG-XXXXXX project code, which is half of an access credential —
+        // it shouldn't sit in a crawler's index or request logs.
+        "/triumph-admin",
+        "/triumph-admin/",
+        "/triumph/track",
+        "/triumph/track/",
+      ],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,
   };

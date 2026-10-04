@@ -16,6 +16,7 @@ import {
   sendClientProjectConfirmationEmail,
 } from "@/lib/services/email-service";
 import { SITE_URL } from "@/lib/utils/site-url";
+import { checkRateLimit, RATE_LIMITED_MESSAGE } from "@/lib/services/rate-limit";
 
 export type SubmitProjectRequestResult =
   | { success: true; projectCode: string }
@@ -29,6 +30,13 @@ export async function submitProjectRequestAction(input: unknown): Promise<Submit
   }
 
   const { fullName, email, country, phone, numberOfSongs, serviceId, projectDetails } = parsed.data;
+
+  // Each submission writes a row and sends two emails — uncapped, this is a
+  // spam/quota-burn primitive on a fully public form (audit finding V-2).
+  if (!(await checkRateLimit("projectIntake", email.trim().toLowerCase()))) {
+    return { success: false, message: RATE_LIMITED_MESSAGE };
+  }
+
   const serviceLabel = TRIUMPH_PRICING_TIERS.find((tier) => tier.id === serviceId)?.name ?? serviceId;
 
   let projectCode: string;

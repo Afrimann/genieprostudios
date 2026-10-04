@@ -14,6 +14,7 @@ import {
 import { TRIUMPH_PRICING_TIERS } from "@/lib/data/triumph-pricing";
 import { ProjectStatusTimeline } from "@/components/triumph/project-status-timeline";
 import { TrackLookupForm } from "@/components/triumph/track-lookup-form";
+import { ExitProjectButton } from "@/components/triumph/exit-project-button";
 import { Reveal } from "@/components/ui/reveal";
 import { BrandGlow } from "@/components/triumph/brand-glow";
 
@@ -92,14 +93,20 @@ export default async function TriumphTrackCodePage({
     <section className="bg-grain relative overflow-hidden border-b border-border bg-card">
       <BrandGlow />
       <Reveal className="relative z-[1] mx-auto flex w-full max-w-3xl flex-col gap-8 px-6 py-24">
-        <div className="flex flex-col gap-1 border-b border-border pb-6">
-          <span className="text-xs font-medium tracking-[0.2em] text-[#22e6c8] uppercase">
-            {project.project_code}
-          </span>
-          <h1 className="font-heading text-2xl font-medium text-foreground sm:text-3xl">{serviceLabel}</h1>
-          <p className="text-xs text-muted-foreground">
-            Submitted {new Date(project.created_at).toLocaleDateString()}
-          </p>
+        <div className="flex items-start justify-between gap-4 border-b border-border pb-6">
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="text-xs font-medium tracking-[0.2em] text-[#22e6c8] uppercase">
+              {project.project_code}
+            </span>
+            <h1 className="font-heading text-2xl font-medium text-foreground sm:text-3xl">{serviceLabel}</h1>
+            <p className="text-xs text-muted-foreground">
+              Submitted {new Date(project.created_at).toLocaleDateString()}
+            </p>
+          </div>
+
+          {/* Clears the tracking + verified cookies — the only way out of a
+              7-day grant on a shared machine. See ExitProjectButton. */}
+          <ExitProjectButton projectCode={project.project_code} />
         </div>
 
         <ProjectStatusTimeline

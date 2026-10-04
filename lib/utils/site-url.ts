@@ -21,3 +21,20 @@ export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || FALLBACK_SITE_URL;
 export function absoluteUrl(path: string): string {
   return new URL(path, SITE_URL).toString();
 }
+
+/**
+ * Like absoluteUrl(), but specifically for assets embedded in outgoing
+ * emails (logo <img> tags) — never for links. A link only needs to resolve
+ * for whoever clicks it (typically the same developer testing locally), so
+ * SITE_URL's local-dev value of http://localhost:3000 is fine there. An
+ * <img src>, though, is fetched by the recipient's mail client from its own
+ * servers (Gmail's, Outlook's), which have no route to a developer's
+ * machine — a real test send from local dev would otherwise ship a broken
+ * image every time. Falls back to the deployed production URL whenever
+ * SITE_URL points at localhost, so logos still render in test emails sent
+ * from a local dev server.
+ */
+export function emailAssetUrl(path: string): string {
+  const base = SITE_URL.includes("localhost") ? FALLBACK_SITE_URL : SITE_URL;
+  return new URL(path, base).toString();
+}

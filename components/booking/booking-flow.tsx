@@ -382,6 +382,7 @@ export function BookingFlow({ initialServiceId }: BookingFlowProps) {
           <BookingSummaryStep
             booking={flow.booking}
             serviceLabel={flow.selectedService.label}
+            onCancelled={flow.resetFlow}
           />
         </StepLayout>
       )}
@@ -403,9 +404,14 @@ type SummaryBooking = {
 function BookingSummaryStep({
   booking,
   serviceLabel,
+  onCancelled,
 }: {
   booking: SummaryBooking;
   serviceLabel: string;
+  // Clears the whole flow back to step one. Passed down rather than
+  // relying on a route change, because this component is already mounted
+  // on /book — see CancelBookingButton's onCancelled prop comment.
+  onCancelled: () => void;
 }) {
   // Local-only state for this step — deliberately not folded into
   // useBookingFlow's step machine per the task brief: consent/payment are
@@ -611,7 +617,7 @@ function BookingSummaryStep({
           <p className="mb-2 text-xs text-muted-foreground">
             Changed your mind? This booking isn&apos;t confirmed until you pay.
           </p>
-          <CancelBookingButton bookingId={booking.id} redirectTo="/book" />
+          <CancelBookingButton bookingId={booking.id} onCancelled={onCancelled} />
         </div>
       </CardContent>
     </Card>

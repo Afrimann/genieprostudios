@@ -11,6 +11,7 @@ import { formatKobo } from "@/lib/utils/money";
 import { Badge } from "@/components/ui/badge";
 import { BookingDetailActions } from "@/components/admin/booking-detail-actions";
 import { TrackDownloadButton } from "@/components/admin/track-download-button";
+import { RealtimeRefresher } from "@/components/admin/realtime-refresher";
 
 // Behind app/admin/(protected)/layout.tsx's live session+admin check, so
 // this page can never be meaningfully prerendered either — same reasoning as
@@ -245,6 +246,13 @@ export default async function AdminBookingDetailPage({
 
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6 sm:p-8">
+      <RealtimeRefresher
+        channelName={`admin-booking-${id}`}
+        tables={[
+          { table: "bookings", filter: `id=eq.${id}` },
+          { table: "payments", filter: `booking_id=eq.${id}` },
+        ]}
+      />
       <Link
         href="/admin/bookings"
         className="flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"

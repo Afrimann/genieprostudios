@@ -11,7 +11,15 @@ import {
 import { formatKobo } from "@/lib/utils/money";
 import { CountUp } from "@/components/home/count-up";
 import { RevenueChart } from "@/components/admin/revenue-chart";
+import { RealtimeRefresher } from "@/components/admin/realtime-refresher";
 import { Badge } from "@/components/ui/badge";
+
+const DASHBOARD_REALTIME_TABLES = [
+  { table: "bookings" },
+  { table: "payments" },
+  { table: "availability_slots" },
+  { table: "portfolio_entries" },
+];
 
 // Behind app/admin/(protected)/layout.tsx's live session+admin check —
 // can never be meaningfully prerendered, same reasoning as every other
@@ -295,6 +303,7 @@ const QUICK_LINKS = [
 export default function AdminDashboardPage() {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 p-6 sm:p-8">
+      <RealtimeRefresher channelName="admin-dashboard" tables={DASHBOARD_REALTIME_TABLES} />
       <p className="text-sm text-muted-foreground">A read on where the studio stands right now.</p>
 
       <Suspense fallback={<StatsFallback />}>

@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { Download, Lock } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Download, Lock, RefreshCw } from "lucide-react";
 
 import { TRIUMPH_PROJECT_STATUS_LABELS, type TriumphProjectStatus } from "@/lib/validation/triumph-update";
 import { TRIUMPH_PAYMENT_STATUS_LABELS, type TriumphPaymentStatus } from "@/lib/validation/triumph-payment";
 import { EmailVerificationGate } from "@/components/triumph/email-verification-gate";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 // Approximates "real time" with polling rather than Supabase Realtime —
 // Realtime needs an RLS policy that grants the subscriber's role SELECT on
@@ -52,30 +53,33 @@ export function ProjectStatusTimeline({
   const [paymentStatus, setPaymentStatus] = useState(initialPaymentStatus);
   const [verified, setVerified] = useState(initialVerified);
   const [updates, setUpdates] = useState(initialUpdates);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    async function poll() {
-      try {
-        const res = await fetch(`/triumph/track/${projectCode}/status`, { cache: "no-store" });
-        if (!res.ok) return;
-        const data: StatusResponse = await res.json();
-        setStatus(data.status);
-        setPaymentStatus(data.paymentStatus);
-        // Only ever moves false -> true here; the "verified" action itself
-        // already flips local state immediately (see onVerified below) —
-        // this just keeps a second tab/reload in sync.
-        setVerified((prev) => prev || data.verified);
-        setUpdates(data.updates);
-      } catch {
-        // Silent — a background refresh failing isn't a user-facing error;
-        // the next tick (or a manual page reload) just tries again.
-      }
+  // Shared by the poll tick and the manual refresh button below — one fetch
+  // path, not two copies of the same request/parse logic.
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`/triumph/track/${projectCode}/status`, { cache: "no-store" });
+      if (!res.ok) return;
+      const data: StatusResponse = await res.json();
+      setStatus(data.status);
+      setPaymentStatus(data.paymentStatus);
+      // Only ever moves false -> true here; the "verified" action itself
+      // already flips local state immediately (see onVerified below) —
+      // this just keeps a second tab/reload in sync.
+      setVerified((prev) => prev || data.verified);
+      setUpdates(data.updates);
+    } catch {
+      // Silent — a background refresh failing isn't a user-facing error;
+      // the next tick (or a manual retry) just tries again.
     }
+  }, [projectCode]);
 
+  useEffect(() => {
     function startPolling() {
       if (intervalRef.current) return;
-      intervalRef.current = setInterval(poll, POLL_INTERVAL_MS);
+      intervalRef.current = setInterval(fetchStatus, POLL_INTERVAL_MS);
     }
 
     function stopPolling() {
@@ -87,7 +91,7 @@ export function ProjectStatusTimeline({
 
     function handleVisibilityChange() {
       if (document.visibilityState === "visible") {
-        poll();
+        fetchStatus();
         startPolling();
       } else {
         stopPolling();
@@ -103,13 +107,36 @@ export function ProjectStatusTimeline({
       stopPolling();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [projectCode]);
+  }, [fetchStatus]);
+
+  async function handleManualRefresh() {
+    setIsRefreshing(true);
+    await fetchStatus();
+    setIsRefreshing(false);
+  }
 
   const hasDeliverable = updates.some((update) => update.fileName);
   const stepIndex = PROGRESS_STEPS.indexOf(status);
 
   return (
     <div className="flex flex-col gap-8">
+      <div className="flex items-center justify-end">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              aria-label="Refresh status"
+              className="flex size-8 items-center justify-center rounded-none border border-border text-muted-foreground transition-colors hover:border-[#22e6c8] hover:text-[#22e6c8] disabled:opacity-50"
+            >
+              <RefreshCw className={`size-3.5 ${isRefreshing ? "animate-spin" : ""}`} aria-hidden="true" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Refresh</TooltipContent>
+        </Tooltip>
+      </div>
+
       {/* Status + payment summary */}
       <div className="flex flex-col divide-y divide-border border border-border sm:flex-row sm:divide-x sm:divide-y-0">
         <div className="flex flex-1 items-center justify-between gap-3 p-4">

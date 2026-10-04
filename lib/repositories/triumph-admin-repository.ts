@@ -4,7 +4,7 @@ import type {
   TriumphProjectUpdate,
 } from "@/lib/repositories/triumph-projects-repository";
 import type { TriumphProjectStatus } from "@/lib/validation/triumph-update";
-import type { TriumphPaymentStatus } from "@/lib/validation/triumph-payment";
+import type { MoneyPaymentStatus, TriumphPaymentStatus } from "@/lib/validation/triumph-payment";
 
 // Admin-side ("engineer") reads/writes for Triumph projects — relies
 // entirely on the is_admin()-gated RLS policies on triumph_projects/
@@ -140,4 +140,118 @@ export async function updateTriumphProjectPaymentStatus(
   }
 
   return data as TriumphProject;
+}
+
+// Mirrors public.triumph_payments (0029_triumph_payments.sql). `project` is
+// the PostgREST-embedded triumph_projects row via the project_id FK — null
+// only if the project was somehow deleted out from under a historical
+// payment row (on delete cascade means this shouldn't happen in practice).
+export type TriumphPayment = {
+  id: string;
+  project_id: string;
+  payment_status: MoneyPaymentStatus;
+  amount_kobo: number;
+  receipt_path: string | null;
+  receipt_name: string | null;
+  created_by: string | null;
+  created_at: string;
+  project: { project_code: string; full_name: string } | null;
+};
+
+/**
+ * Calls the record_triumph_payment RPC (0029) — the only write path for the
+ * ledger, so a recorded payment and the project's payment_status always
+ * land atomically. The confirmation-code check has already happened in
+ * triumph-admin-actions.ts before this is ever called.
+ */
+export async function recordTriumphPayment(params: {
+  projectId: string;
+  paymentStatus: MoneyPaymentStatus;
+  amountKobo: number;
+  receiptPath: string | null;
+  receiptName: string | null;
+}): Promise<TriumphPayment> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("record_triumph_payment", {
+    p_project_id: params.projectId,
+    p_payment_status: params.paymentStatus,
+    p_amount_kobo: params.amountKobo,
+    p_receipt_path: params.receiptPath,
+    p_receipt_name: params.receiptName,
+  });
+
+  if (error) {
+    throw new Error(`recordTriumphPayment: ${error.message}`);
+  }
+
+  return data as TriumphPayment;
+}
+
+export type TriumphRevenueOverview = {
+  allTimeKobo: number;
+  thisMonthKobo: number;
+  lastMonthKobo: number;
+  payments: TriumphPayment[];
+};
+
+/**
+ * Powers /triumph-admin/revenue — same "fetch the ledger, reduce client-side"
+ * convention as getRevenueOverview() in admin-dashboard-repository.ts (no
+ * server-side GROUP BY available via PostgREST, and volume here is low
+ * enough that this is fine).
+ */
+export async function getTriumphRevenueOverview(): Promise<TriumphRevenueOverview> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("triumph_payments")
+    .select("*, project:triumph_projects(project_code, full_name)")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`getTriumphRevenueOverview: ${error.message}`);
+  }
+
+  const payments = (data ?? []) as TriumphPayment[];
+  const now = new Date();
+  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+  let allTimeKobo = 0;
+  let thisMonthKobo = 0;
+  let lastMonthKobo = 0;
+
+  for (const payment of payments) {
+    const createdAt = new Date(payment.created_at);
+    allTimeKobo += payment.amount_kobo;
+
+    if (createdAt >= thisMonthStart) {
+      thisMonthKobo += payment.amount_kobo;
+    } else if (createdAt >= lastMonthStart) {
+      lastMonthKobo += payment.amount_kobo;
+    }
+  }
+
+  return { allTimeKobo, thisMonthKobo, lastMonthKobo, payments };
+}
+
+/**
+ * Signed, time-limited download URL for a payment receipt — relies on the
+ * triumph_receipts_select_admin storage policy (0029), so this only
+ * succeeds when called by an admin's own session. Same cookie-scoped-client
+ * + 60s-ttl pattern as getTrackDownloadUrl() in booking-tracks-repository.ts.
+ */
+export async function getTriumphReceiptDownloadUrl(filePath: string): Promise<string> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.storage
+    .from("triumph-receipts")
+    .createSignedUrl(filePath, 60);
+
+  if (error || !data) {
+    throw new Error(`getTriumphReceiptDownloadUrl: ${error?.message ?? "no URL returned"}`);
+  }
+
+  return data.signedUrl;
 }

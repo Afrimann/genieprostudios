@@ -1,3 +1,5 @@
+import { timingSafeEqual } from "crypto";
+
 import { runDailySweep } from "@/lib/services/reminder-service";
 
 // Vercel Cron entry point for the Phase 4 daily sweep (stale-pending
@@ -22,7 +24,17 @@ export async function GET(request: Request): Promise<Response> {
 
   const authHeader = request.headers.get("authorization");
 
-  if (authHeader !== `Bearer ${cronSecret}`) {
+  // timingSafeEqual rather than !== — same reasoning as the Paystack
+  // webhook's signature check: a plain compare leaks how much of the secret
+  // matched through response timing.
+  const providedBuf = Buffer.from(authHeader ?? "", "utf8");
+  const expectedBuf = Buffer.from(`Bearer ${cronSecret}`, "utf8");
+
+  if (
+    !authHeader ||
+    providedBuf.length !== expectedBuf.length ||
+    !timingSafeEqual(providedBuf, expectedBuf)
+  ) {
     return new Response(null, { status: 401 });
   }
 

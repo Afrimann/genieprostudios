@@ -14,6 +14,14 @@ interface CancelBookingButtonProps {
   // refresh for the list page itself (the cancelled row simply disappears,
   // per getBookingsForCurrentCustomer's .neq("status", "cancelled")).
   redirectTo?: string;
+  // Takes precedence over redirectTo/refresh when supplied. Needed by the
+  // booking flow (components/booking/booking-flow.tsx), which is a Client
+  // Component living ON /book: router.push("/book") from there is a no-op
+  // navigation that never remounts it, so its ~18 pieces of form state
+  // survived a cancel and the summary step stayed fully populated against a
+  // booking that no longer existed. The flow passes resetFlow() here
+  // instead of relying on a remount that can't happen.
+  onCancelled?: () => void;
 }
 
 /**
@@ -21,7 +29,11 @@ interface CancelBookingButtonProps {
  * of this site's custom UI) for a customer opting out of a pending_deposit
  * booking before ever paying for it.
  */
-export function CancelBookingButton({ bookingId, redirectTo }: CancelBookingButtonProps) {
+export function CancelBookingButton({
+  bookingId,
+  redirectTo,
+  onCancelled,
+}: CancelBookingButtonProps) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -41,7 +53,14 @@ export function CancelBookingButton({ bookingId, redirectTo }: CancelBookingButt
       return;
     }
 
-    if (redirectTo) {
+    // Reset the inline confirm too — without this, a caller that keeps this
+    // component mounted (the booking flow) would re-render it still stuck in
+    // its "Cancel this booking?" confirm state.
+    setConfirming(false);
+
+    if (onCancelled) {
+      onCancelled();
+    } else if (redirectTo) {
       router.push(redirectTo);
     } else {
       router.refresh();

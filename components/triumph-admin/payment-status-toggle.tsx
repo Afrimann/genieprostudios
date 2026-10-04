@@ -8,7 +8,13 @@ import {
   TRIUMPH_PAYMENT_STATUSES,
   TRIUMPH_PAYMENT_STATUS_LABELS,
   type TriumphPaymentStatus,
+  type MoneyPaymentStatus,
 } from "@/lib/validation/triumph-payment";
+import { RecordPaymentModal } from "@/components/triumph-admin/record-payment-modal";
+
+function isMoneyStatus(status: TriumphPaymentStatus): status is MoneyPaymentStatus {
+  return status === "deposit_paid" || status === "paid_in_full";
+}
 
 // Segmented toggle, not a <select> — requested explicitly (2026-10-01),
 // mirroring the squared two-segment control language already used by
@@ -18,6 +24,14 @@ import {
 // (update_triumph_project_payment_status, 0024). Text-only segments, no
 // per-option icon — the label alone is enough, and matching icons to
 // three payment states doesn't add real information.
+//
+// Selecting "Deposit Paid" or "Fully Paid" opens RecordPaymentModal instead
+// of writing straight through (2026-10-03 client request) — those two
+// targets represent money being confirmed, so they're gated behind a team
+// confirmation code + a ledger entry (0029_triumph_payments.sql). Reverting
+// to "Payment Pending" is not a money event and stays a direct,
+// ungated write via the original RPC — see triumph-admin-actions.ts's
+// isCorrectConfirmationCode comment for the full reasoning.
 export function PaymentStatusToggle({
   projectId,
   currentStatus,
@@ -28,9 +42,16 @@ export function PaymentStatusToggle({
   const router = useRouter();
   const [pending, setPending] = useState<TriumphPaymentStatus | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [modalTarget, setModalTarget] = useState<MoneyPaymentStatus | null>(null);
 
   async function handleSelect(nextStatus: TriumphPaymentStatus) {
     if (nextStatus === currentStatus || pending) return;
+
+    if (isMoneyStatus(nextStatus)) {
+      setErrorMessage(null);
+      setModalTarget(nextStatus);
+      return;
+    }
 
     setErrorMessage(null);
     setPending(nextStatus);
@@ -78,6 +99,19 @@ export function PaymentStatusToggle({
         })}
       </div>
       {errorMessage && <p className="text-xs text-destructive">{errorMessage}</p>}
+
+      <RecordPaymentModal
+        open={modalTarget !== null}
+        projectId={projectId}
+        targetStatus={modalTarget}
+        onOpenChange={(open) => {
+          if (!open) setModalTarget(null);
+        }}
+        onRecorded={() => {
+          setModalTarget(null);
+          router.refresh();
+        }}
+      />
     </div>
   );
 }

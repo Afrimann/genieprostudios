@@ -21,6 +21,7 @@ import {
 } from "@/lib/services/triumph-email-verification";
 import { getTriumphProjectById } from "@/lib/repositories/triumph-projects-repository";
 import { sendDownloadVerificationCodeEmail } from "@/lib/services/email-service";
+import { checkRateLimit, RATE_LIMITED_MESSAGE } from "@/lib/services/rate-limit";
 
 async function resolveTrackedProject(projectCode: string) {
   const cookieStore = await cookies();
@@ -49,6 +50,12 @@ export async function requestDownloadVerificationCodeAction(
 
   if (!project) {
     return { success: false, message: "Your session has expired. Please look up your project again." };
+  }
+
+  // Throttled because each call sends a real email — uncapped, this is an
+  // inbox-flooding primitive aimed at the client (audit finding V-2).
+  if (!(await checkRateLimit("otpRequest", project.id))) {
+    return { success: false, message: RATE_LIMITED_MESSAGE };
   }
 
   const code = generateEmailVerificationCode(project.id);
@@ -80,6 +87,15 @@ export async function confirmDownloadVerificationCodeAction(
 
   if (!project) {
     return { success: false, message: "Your session has expired. Please look up your project again." };
+  }
+
+  // Checked BEFORE verifying the code, so a brute-force attempt burns its
+  // budget whether or not each guess happens to be right. This is the
+  // highest-value limit in the app: without it a 6-digit code (10^6) with
+  // unlimited guesses is the only thing between a tracking cookie and
+  // another client's finished masters (audit finding V-2).
+  if (!(await checkRateLimit("otpConfirm", project.id))) {
+    return { success: false, message: RATE_LIMITED_MESSAGE };
   }
 
   if (!verifyEmailVerificationCode(project.id, code)) {

@@ -2,8 +2,11 @@ import { Suspense } from "react";
 import Link from "next/link";
 
 import { getAllTicketsForAdmin } from "@/lib/repositories/admin-support-repository";
+import { RealtimeRefresher } from "@/components/admin/realtime-refresher";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+const SUPPORT_LIST_REALTIME_TABLES = [{ table: "support_tickets" }, { table: "support_messages" }];
 
 // Behind app/admin/(protected)/layout.tsx's live session+admin check, so
 // this page can never be meaningfully prerendered either — same reasoning
@@ -74,6 +77,7 @@ function TicketsTableFallback() {
 export default function AdminSupportPage() {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6 sm:p-8">
+      <RealtimeRefresher channelName="admin-support-list" tables={SUPPORT_LIST_REALTIME_TABLES} />
       <p className="text-sm text-muted-foreground">Front desk conversations with customers.</p>
 
       <Card>

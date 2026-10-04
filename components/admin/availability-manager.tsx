@@ -15,6 +15,7 @@ import type {
   SlotWithBookings,
 } from "@/lib/repositories/availability-repository";
 import type { BookingStatus } from "@/lib/services/booking-service";
+import { useRealtimeRefresh } from "@/lib/hooks/use-realtime-refresh";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -77,6 +78,8 @@ const BOOKING_STATUS_VARIANTS: Record<
   cancelled: "destructive",
 };
 
+const AVAILABILITY_REALTIME_TABLES = [{ table: "availability_slots" }, { table: "bookings" }];
+
 export function AvailabilityManager() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
   const [slots, setSlots] = useState<SlotWithBookings[]>([]);
@@ -86,6 +89,15 @@ export function AvailabilityManager() {
   const [isPending, startTransition] = useTransition();
 
   const selectedIso = selectedDate ? toIsoDate(selectedDate) : null;
+
+  useRealtimeRefresh({
+    channelName: "admin-availability",
+    tables: AVAILABILITY_REALTIME_TABLES,
+    // No-op until a date is picked — nothing is rendered to refresh yet.
+    onRefresh: () => {
+      if (selectedIso) loadSlots(selectedIso);
+    },
+  });
 
   const {
     register,

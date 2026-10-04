@@ -4,6 +4,7 @@ import "./globals.css";
 import { Analytics } from "@vercel/analytics/next"
 
 import { SITE_URL, absoluteUrl } from "@/lib/utils/site-url";
+import { serializeJsonLd } from "@/lib/utils/json-ld";
 
 // "Tape Room" identity (2026-09-27, studio-color-scheme-v2 reference):
 // Fraunces (serif) carries both body copy and headings — no separate
@@ -94,7 +95,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script
           type="application/ld+json"
           // eslint-disable-next-line react/no-danger
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(ORGANIZATION_JSON_LD) }}
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(ORGANIZATION_JSON_LD) }}
         />
       </body>
     </html>

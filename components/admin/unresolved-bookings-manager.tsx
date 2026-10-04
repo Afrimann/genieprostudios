@@ -9,6 +9,7 @@ import {
 } from "@/lib/services/admin-booking-actions";
 import type { UnresolvedBooking } from "@/lib/repositories/admin-booking-repository";
 import { formatKobo } from "@/lib/utils/money";
+import { useRealtimeRefresh } from "@/lib/hooks/use-realtime-refresh";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ReschedulePanel } from "@/components/admin/reschedule-panel";
@@ -23,6 +24,8 @@ import {
 function formatTimeRange(start: string, end: string): string {
   return `${start.slice(0, 5)} – ${end.slice(0, 5)}`;
 }
+
+const UNRESOLVED_BOOKINGS_TABLES = [{ table: "bookings" }];
 
 export function UnresolvedBookingsManager() {
   const [bookings, setBookings] = useState<UnresolvedBooking[]>([]);
@@ -45,6 +48,12 @@ export function UnresolvedBookingsManager() {
 
     setBookings(result.bookings);
   }
+
+  useRealtimeRefresh({
+    channelName: "admin-unresolved-bookings",
+    tables: UNRESOLVED_BOOKINGS_TABLES,
+    onRefresh: refresh,
+  });
 
   // Initial load is a fully self-contained local function (never calling out
   // to `refresh`, which is declared outside the effect) — matches

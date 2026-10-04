@@ -13,6 +13,7 @@ import {
   sendBalanceReminderEmail,
 } from "@/lib/services/email-service";
 import { SITE_URL } from "@/lib/utils/site-url";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // Business logic + orchestration for the Phase 4 daily sweep. Called only
 // from app/api/cron/daily-sweep/route.ts (service-role context — no user
@@ -212,7 +213,32 @@ export type DailySweepSummary = {
   stalePendingCleanup: { processed: number };
   autoCancel: SweepResult;
   balanceReminder: SweepResult;
+  rateLimitsPruned: number;
 };
+
+/**
+ * Drops rate_limits rows older than a day (0030_rate_limits.sql). Those
+ * counters are disposable once their window has passed — this keeps the
+ * table from growing without bound. Housekeeping only: a failure here must
+ * never fail the sweep, since the throttles themselves keep working on a
+ * table that simply has stale rows in it.
+ */
+async function pruneRateLimits(): Promise<number> {
+  try {
+    const supabase = createAdminClient();
+    const { data, error } = await supabase.rpc("prune_rate_limits");
+
+    if (error) {
+      console.error("runDailySweep: prune_rate_limits failed", error.message);
+      return 0;
+    }
+
+    return typeof data === "number" ? data : 0;
+  } catch (err) {
+    console.error("runDailySweep: unexpected error pruning rate limits", err);
+    return 0;
+  }
+}
 
 /**
  * Runs the three sweeps in order — stale-cleanup, then auto-cancel, then
@@ -222,11 +248,16 @@ export type DailySweepSummary = {
  * (pending_deposit+stale / deposited+<=24h / deposited+>24h+no-recent-log)
  * are mutually exclusive by status and time window, so no booking can be
  * matched by more than one sweep in a single run.
+ *
+ * Rate-limit pruning runs last and is independent of all three — it's
+ * unrelated housekeeping that just shares this already-scheduled job rather
+ * than needing its own pg_cron entry.
  */
 export async function runDailySweep(): Promise<DailySweepSummary> {
   const stalePendingCleanup = await runStalePendingCleanupSweep();
   const autoCancel = await runAutoCancelSweep();
   const balanceReminder = await runBalanceReminderSweep();
+  const rateLimitsPruned = await pruneRateLimits();
 
-  return { stalePendingCleanup, autoCancel, balanceReminder };
+  return { stalePendingCleanup, autoCancel, balanceReminder, rateLimitsPruned };
 }

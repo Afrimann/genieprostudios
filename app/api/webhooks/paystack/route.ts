@@ -1,4 +1,4 @@
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 
 import { confirmPaymentByReference } from "@/lib/services/payment-confirmation-service";
 
@@ -49,7 +49,19 @@ export async function POST(request: Request): Promise<Response> {
 
   const expectedSignature = createHmac("sha512", secret).update(rawBody).digest("hex");
 
-  if (!signature || signature !== expectedSignature) {
+  // timingSafeEqual, not !== — a plain string compare short-circuits on the
+  // first differing byte, leaking how many leading hex characters matched
+  // via response timing. Length is checked first because timingSafeEqual
+  // throws on mismatched buffer lengths (and the expected length, 128 hex
+  // chars for SHA-512, is not itself a secret).
+  const signatureBuf = Buffer.from(signature ?? "", "utf8");
+  const expectedBuf = Buffer.from(expectedSignature, "utf8");
+
+  if (
+    !signature ||
+    signatureBuf.length !== expectedBuf.length ||
+    !timingSafeEqual(signatureBuf, expectedBuf)
+  ) {
     return new Response(null, { status: 401 });
   }
 

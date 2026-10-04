@@ -1,6 +1,11 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { BookingStatus } from "@/lib/services/booking-service";
-import { sendOwnerNewBookingEmail } from "@/lib/services/email-service";
+import {
+  sendOwnerNewBookingEmail,
+  sendCustomerBookingConfirmedEmail,
+  sendCustomerBalancePaidEmail,
+} from "@/lib/services/email-service";
+import { SITE_URL } from "@/lib/utils/site-url";
 
 // Shared by both confirmation paths for a Paystack charge:
 //   1. app/api/webhooks/paystack/route.ts — Paystack pushing us a
@@ -103,35 +108,89 @@ export async function confirmPaymentByReference(
     return { outcome: "error", message: updateBookingError.message };
   }
 
-  // Owner notification, best-effort, only on the FIRST payment (mirrors the
-  // webhook's original behavior) — never allowed to change the outcome
-  // reported to the caller.
-  try {
-    if (booking.status === "pending_deposit") {
-      const ownerEmail = process.env.OWNER_NOTIFICATION_EMAIL;
+  // `booking.status` here is still the PRE-update status — the local object
+  // was never mutated, only the DB row was, so this is the correct "what
+  // was it before this payment" check for both branches below. The
+  // newStatus half of wasFirstPayment matters because a successful payment
+  // doesn't strictly guarantee a status change (see the newAmountPaidKobo
+  // comparison above) — in practice every real payment is exactly the
+  // deposit or exactly the balance, so this never actually skips, but it
+  // keeps "booking confirmed" from firing on a technicality where nothing
+  // actually confirmed, and keeps newStatus's type narrowed to
+  // "deposited" | "paid_in_full" below with no unsafe cast needed.
+  const wasFirstPayment =
+    booking.status === "pending_deposit" && (newStatus === "deposited" || newStatus === "paid_in_full");
+  const wasBalancePayment = booking.status === "deposited" && newStatus === "paid_in_full";
 
-      if (ownerEmail) {
-        const [{ data: profile }, { data: service }] = await Promise.all([
-          admin.from("profiles").select("full_name, email").eq("id", booking.customer_id).maybeSingle(),
-          admin.from("services").select("label").eq("id", booking.service_id).maybeSingle(),
-        ]);
+  // Notifications, best-effort — never allowed to change the outcome
+  // reported to the caller. Owner gets notified only on the first payment
+  // (mirrors the original behavior); the customer gets a parallel
+  // confirmation on that same first payment, plus a separate one here when
+  // a remaining balance lands after an earlier deposit (2026-10-03 client
+  // request: "email whenever a booking is successfully made... and also
+  // when the remaining balance is paid").
+  if (wasFirstPayment || wasBalancePayment) {
+    try {
+      const [{ data: profile }, { data: service }] = await Promise.all([
+        admin.from("profiles").select("full_name, email").eq("id", booking.customer_id).maybeSingle(),
+        admin.from("services").select("label").eq("id", booking.service_id).maybeSingle(),
+      ]);
 
-        await sendOwnerNewBookingEmail({
-          ownerEmail,
-          customerName: profile?.full_name ?? "Unknown customer",
-          customerEmail: profile?.email ?? "unknown",
-          serviceLabel: service?.label ?? "Unknown service",
+      const customerName = profile?.full_name ?? "";
+      const customerEmail = profile?.email ?? null;
+      const serviceLabel = service?.label ?? "Unknown service";
+
+      if (wasFirstPayment) {
+        const ownerEmail = process.env.OWNER_NOTIFICATION_EMAIL;
+
+        if (ownerEmail) {
+          await sendOwnerNewBookingEmail({
+            ownerEmail,
+            customerName: customerName || "Unknown customer",
+            customerEmail: customerEmail ?? "unknown",
+            serviceLabel,
+            sessionDate: booking.session_date,
+            sessionStartTime: booking.session_start_time,
+            sessionEndTime: booking.session_end_time,
+            amountPaidKobo: newAmountPaidKobo,
+            totalPriceKobo: booking.total_price_kobo,
+            status: newStatus,
+          });
+        }
+
+        // Re-checking newStatus directly (not just trusting wasFirstPayment)
+        // lets TypeScript narrow it to "deposited" | "paid_in_full" on its
+        // own — no unsafe cast needed for sendCustomerBookingConfirmedEmail's
+        // stricter status param.
+        if (customerEmail && (newStatus === "deposited" || newStatus === "paid_in_full")) {
+          await sendCustomerBookingConfirmedEmail({
+            customerEmail,
+            customerName,
+            serviceLabel,
+            sessionDate: booking.session_date,
+            sessionStartTime: booking.session_start_time,
+            sessionEndTime: booking.session_end_time,
+            amountPaidKobo: newAmountPaidKobo,
+            totalPriceKobo: booking.total_price_kobo,
+            status: newStatus,
+            siteUrl: SITE_URL,
+          });
+        }
+      } else if (customerEmail) {
+        await sendCustomerBalancePaidEmail({
+          customerEmail,
+          customerName,
+          serviceLabel,
           sessionDate: booking.session_date,
           sessionStartTime: booking.session_start_time,
           sessionEndTime: booking.session_end_time,
-          amountPaidKobo: newAmountPaidKobo,
           totalPriceKobo: booking.total_price_kobo,
-          status: newStatus,
+          siteUrl: SITE_URL,
         });
       }
+    } catch (err) {
+      console.error("confirmPaymentByReference: unexpected error sending notifications", err);
     }
-  } catch (err) {
-    console.error("confirmPaymentByReference: unexpected error sending owner notification", err);
   }
 
   return { outcome: "applied", newStatus };

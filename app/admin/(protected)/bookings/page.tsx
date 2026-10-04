@@ -4,8 +4,11 @@ import Link from "next/link";
 import { getAllBookingsForAdmin } from "@/lib/repositories/admin-booking-repository";
 import { formatKobo } from "@/lib/utils/money";
 import { UnresolvedBookingsManager } from "@/components/admin/unresolved-bookings-manager";
+import { RealtimeRefresher } from "@/components/admin/realtime-refresher";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+const BOOKINGS_LIST_REALTIME_TABLES = [{ table: "bookings" }, { table: "payments" }];
 
 // Behind app/admin/(protected)/layout.tsx's live session+admin check, so this
 // page can never be meaningfully prerendered either — same reasoning as the
@@ -90,6 +93,7 @@ function AllBookingsTableFallback() {
 export default function AdminBookingsPage() {
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6 sm:p-8">
+      <RealtimeRefresher channelName="admin-bookings-list" tables={BOOKINGS_LIST_REALTIME_TABLES} />
       <p className="text-sm text-muted-foreground">
         Every booking, and the ones that need a decision right now.
       </p>

@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 
 import { absoluteUrl } from "@/lib/utils/site-url";
+import { serializeJsonLd } from "@/lib/utils/json-ld";
 import { TriumphHero } from "@/components/triumph/hero";
 import { TriumphMarquee } from "@/components/triumph/marquee";
 import { TriumphArtists } from "@/components/triumph/artists";
@@ -84,7 +85,7 @@ export default function TriumphPage() {
       <script
         type="application/ld+json"
         // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(TRIUMPH_JSON_LD) }}
+        dangerouslySetInnerHTML={{ __html: serializeJsonLd(TRIUMPH_JSON_LD) }}
       />
       <TriumphHero />
       <TriumphArtists />
