@@ -554,3 +554,46 @@ export async function sendDownloadVerificationCodeEmail(params: {
     fromName: "Triumph Music Global",
   });
 }
+
+/**
+ * Front desk staff invite — sent via this project's own Resend pipeline
+ * rather than Supabase Auth's built-in invite email. `acceptUrl` is built by
+ * the caller (lib/services/frontdesk-staff-actions.ts) from a token Supabase
+ * generated via admin.generateLink(), in this project's own
+ * /auth/confirm?token_hash=...&type=invite&next=... shape — see that route
+ * handler's comment for why the token_hash flow is used at all.
+ *
+ * Deliberately NOT inviteUserByEmail()'s automatic email: Supabase's default
+ * mailer is rate-limited to a handful of sends/hour, and editing its
+ * template at all requires custom SMTP configured first — friction this
+ * project's existing Resend setup already has solved for every other
+ * transactional email. Routing invites through the same pipeline also means
+ * a re-invite (someone who never finished setting a password) can always
+ * send a fresh email, where inviteUserByEmail() itself just errors
+ * "already registered" for an existing-but-unconfirmed account.
+ */
+export async function sendFrontdeskInviteEmail(params: {
+  to: string;
+  acceptUrl: string;
+}): Promise<SendEmailResult> {
+  const { to, acceptUrl } = params;
+
+  const brand = GENIE_PRO_BRAND;
+  const bodyHtml =
+    eyebrow("Front desk invite", brand) +
+    heading("You've been invited to the front desk", brand) +
+    paragraph(
+      "You've been given access to the GenieProStudios front desk board, where you'll clock booked sessions in and out.",
+    ) +
+    ctaButton(acceptUrl, "Set your password", brand) +
+    paragraph("This link is single-use and expires after a while — if it's stopped working, ask the studio owner to send a new one.");
+
+  return sendEmail({
+    to,
+    subject: "You've been invited to the GenieProStudios front desk",
+    html: renderEmailLayout(brand, {
+      previewText: "Set your password to start using the front desk board.",
+      bodyHtml,
+    }),
+  });
+}

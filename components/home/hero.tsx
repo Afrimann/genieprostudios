@@ -1,21 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 
 import { Button } from "@/components/ui/button";
-
-// three.js is ~160KB gzipped — far too heavy to sit in the homepage's
-// initial bundle, which is the LCP-critical path. Dynamic + ssr:false keeps
-// it out of the server render and out of first paint entirely; it streams in
-// after hydration and swaps over the DecorativeRings fallback below.
-// ssr:false is also a hard requirement, not just an optimisation: R3F needs
-// a real canvas/WebGL context, which doesn't exist during SSR.
-const HeroSpectrum = dynamic(
-  () => import("@/components/home/hero-spectrum").then((m) => m.HeroSpectrum),
-  { ssr: false },
-);
+import { HeroSpectrum } from "@/components/home/hero-spectrum";
 
 // Decorative ring/arc motif around the thumbnail cluster — reads as a
 // turntable platter / VU-meter dial sweep rather than generic decoration,
@@ -244,11 +233,11 @@ export function Hero() {
           </motion.div>
         </motion.div>
 
-        {/* R3F prototype (2026-10-04). DecorativeRings stays as the
-            pre-hydration layer — it's SVG, renders server-side, and keeps
-            the panel from being an empty box while three.js streams in.
-            FloatingThumbnails is parked rather than deleted so reverting is
-            a one-line swap; see the note in hero-spectrum.tsx. */}
+        {/* DecorativeRings sits behind the spectrum as the static layer —
+            it's SVG so it renders server-side, which keeps the panel from
+            being an empty box in the moment before the canvas paints.
+            FloatingThumbnails is parked rather than deleted: it's the
+            previous treatment, and swapping back is a one-line change. */}
         <div className="relative order-1 mx-auto aspect-square w-full max-w-sm md:order-2">
           <DecorativeRings />
           <FloatingThumbnails />

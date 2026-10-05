@@ -58,6 +58,12 @@ export function HeroSpectrum() {
 
     let width = 0;
     let height = 0;
+    // Tracks the last rendered timestamp so a resize can repaint the exact
+    // frame that was on screen. Setting canvas.width (below) CLEARS the
+    // canvas — without repainting after a resize, the reduced-motion path,
+    // which draws a single frame and then stops, would be wiped blank by
+    // any layout change and never recover.
+    let lastElapsed = 0;
 
     function resize() {
       if (!canvas || !ctx) return;
@@ -70,11 +76,8 @@ export function HeroSpectrum() {
       canvas.width = Math.round(width * dpr);
       canvas.height = Math.round(height * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      draw(lastElapsed);
     }
-
-    resize();
-    const resizeObserver = new ResizeObserver(resize);
-    resizeObserver.observe(canvas);
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     let frameId = 0;
@@ -86,6 +89,7 @@ export function HeroSpectrum() {
     function draw(elapsed: number) {
       if (!ctx) return;
 
+      lastElapsed = elapsed;
       ctx.clearRect(0, 0, width, height);
 
       const t = elapsed;
@@ -136,6 +140,11 @@ export function HeroSpectrum() {
         return;
       }
       startTime = performance.now();
+      // Paint one frame synchronously before handing off to rAF. Browsers
+      // suspend requestAnimationFrame entirely in a hidden tab, so a page
+      // opened in the background (middle-click, restored session) would
+      // otherwise sit on an empty canvas until first focus.
+      draw(0);
       frameId = requestAnimationFrame(loop);
     }
 
@@ -157,6 +166,14 @@ export function HeroSpectrum() {
       stop();
       start();
     }
+
+    // resize() before start(): it establishes width/height and the DPR
+    // transform, which draw() depends on. ResizeObserver fires once on
+    // observe(), so the panel also repaints correctly if the grid column
+    // settles to a different size after first layout.
+    resize();
+    const resizeObserver = new ResizeObserver(resize);
+    resizeObserver.observe(canvas);
 
     start();
     document.addEventListener("visibilitychange", onVisibility);

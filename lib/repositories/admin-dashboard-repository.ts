@@ -1,15 +1,20 @@
 import { createClient } from "@/lib/supabase/server";
+import { lagosDateOffset, lagosInstantIso } from "@/lib/utils/lagos-time";
 
 // Dumb data access for the admin dashboard home (app/admin/(protected)/page.tsx)
 // — a handful of independent counts/sums, each its own small query rather
 // than one large join, since they don't share a filter shape. Relies on RLS
 // (bookings_select_admin/payments_select_admin/portfolio_entries_select_admin,
 // 0010_rls_policies.sql; availability_slots' public-open-select policy
-// covers the open-windows count too) — no admin check of its own, same
-// convention as availability-repository.ts/admin-booking-repository.ts.
+// covers the open-windows count too; session_attendance_select_admin,
+// 0033_session_attendance.sql, for the ongoing-session count) — no admin
+// check of its own, same convention as availability-repository.ts/
+// admin-booking-repository.ts.
 export type AdminDashboardStats = {
   openWindowsCount: number;
   upcomingBookingsCount: number;
+  /** 0 or 1 in practice — the booth can only hold one session at a time. See getAdminDashboardStats' own comment. */
+  ongoingSessionCount: number;
   unresolvedCount: number;
   revenueThisMonthKobo: number;
   portfolioPublishedCount: number;
@@ -23,14 +28,29 @@ function toIsoDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+type UpcomingBookingRow = {
+  session_date: string | null;
+  session_start_time: string | null;
+};
+
 export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   const supabase = await createClient();
   const todayIso = toIsoDate(new Date());
   const monthStartIso = toIsoDate(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  // One day further back than todayIso, not todayIso itself — this is only
+  // a coarse pre-filter to bound the row count; the real "has this session
+  // actually started yet" check happens below in JS against the full
+  // session_start_at() instant. Using todayIso here (a bare server-local
+  // date, not Lagos-aware) risked excluding a session that IS still
+  // upcoming by Lagos wall-clock time during the UTC/Lagos day-boundary
+  // window — same class of bug lagos_today()/lagosToday() exist to avoid
+  // elsewhere (0032_frontdesk_role.sql, lib/utils/lagos-time.ts).
+  const upcomingWindowStartIso = lagosDateOffset(-1);
 
   const [
     openWindows,
-    upcomingBookings,
+    upcomingBookingsRows,
+    ongoingSession,
     unresolved,
     revenue,
     portfolioPublished,
@@ -41,11 +61,30 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
       .select("id", { count: "exact", head: true })
       .eq("status", "open")
       .gte("date", todayIso),
+    // Previously `.select("id", { count: "exact", head: true })` filtered
+    // only by `session_date >= todayIso` — a bare calendar-day comparison.
+    // That counted a booking as "upcoming" for its entire session_date, so
+    // a session scheduled for 12:00–18:00 today stayed "upcoming" at 9pm
+    // that same evening, completed or not — found live 2026-10-05, a
+    // booking the front desk had already clocked out still showed as
+    // upcoming on the dashboard. Fetching the rows (not just a head count)
+    // so the actual start instant can be checked below fixes that: a
+    // booking only counts once its session_start_at() is still in the
+    // future, which is what "upcoming" actually means.
     supabase
       .from("bookings")
-      .select("id", { count: "exact", head: true })
+      .select("session_date, session_start_time")
       .in("status", ["deposited", "paid_in_full"])
-      .gte("session_date", todayIso),
+      .gte("session_date", upcomingWindowStartIso),
+    // Ongoing: clocked in, not yet clocked out. The studio only has one
+    // booth, so this is a 0-or-1 signal in practice, not a general count —
+    // see the "Ongoing" meta line on the Upcoming bookings tile
+    // (app/admin/(protected)/page.tsx).
+    supabase
+      .from("session_attendance")
+      .select("booking_id", { count: "exact", head: true })
+      .not("clocked_in_at", "is", null)
+      .is("clocked_out_at", null),
     supabase.rpc("bookings_unresolved_past_sessions"),
     supabase
       .from("payments")
@@ -62,8 +101,11 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   if (openWindows.error) {
     throw new Error(`getAdminDashboardStats: openWindows: ${openWindows.error.message}`);
   }
-  if (upcomingBookings.error) {
-    throw new Error(`getAdminDashboardStats: upcomingBookings: ${upcomingBookings.error.message}`);
+  if (upcomingBookingsRows.error) {
+    throw new Error(`getAdminDashboardStats: upcomingBookings: ${upcomingBookingsRows.error.message}`);
+  }
+  if (ongoingSession.error) {
+    throw new Error(`getAdminDashboardStats: ongoingSession: ${ongoingSession.error.message}`);
   }
   if (unresolved.error) {
     throw new Error(`getAdminDashboardStats: unresolved: ${unresolved.error.message}`);
@@ -78,6 +120,18 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
     throw new Error(`getAdminDashboardStats: portfolioTotal: ${portfolioTotal.error.message}`);
   }
 
+  const now = Date.now();
+  const upcomingBookingsCount = ((upcomingBookingsRows.data ?? []) as UpcomingBookingRow[]).filter(
+    (row) => {
+      // Null session_date/session_start_time means an is_addon booking
+      // (per-song mixing/mastering, no studio time reserved — see
+      // 0019_addon_bookings.sql) — never "upcoming" in the room-booking
+      // sense this tile reports on.
+      if (!row.session_date || !row.session_start_time) return false;
+      return new Date(lagosInstantIso(row.session_date, row.session_start_time)).getTime() > now;
+    },
+  ).length;
+
   const revenueThisMonthKobo = (revenue.data ?? []).reduce(
     (sum, row) => sum + (row.amount_kobo as number),
     0,
@@ -85,7 +139,8 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
 
   return {
     openWindowsCount: openWindows.count ?? 0,
-    upcomingBookingsCount: upcomingBookings.count ?? 0,
+    upcomingBookingsCount,
+    ongoingSessionCount: ongoingSession.count ?? 0,
     unresolvedCount: (unresolved.data ?? []).length,
     revenueThisMonthKobo,
     portfolioPublishedCount: portfolioPublished.count ?? 0,

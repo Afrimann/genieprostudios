@@ -8,6 +8,8 @@ import {
   AlertTriangle,
   Clapperboard,
   MessageCircle,
+  Users,
+  Activity,
   LogOut,
   Radio,
 } from "lucide-react";
@@ -21,6 +23,8 @@ const NAV_ITEMS = [
   { href: "/admin/bookings", label: "Bookings", icon: AlertTriangle },
   { href: "/admin/support", label: "Support", icon: MessageCircle },
   { href: "/admin/portfolio", label: "Portfolio", icon: Clapperboard },
+  { href: "/admin/activity", label: "Activity", icon: Activity },
+  { href: "/admin/staff", label: "Staff", icon: Users },
 ] as const;
 
 /**

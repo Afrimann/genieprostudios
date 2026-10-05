@@ -19,6 +19,9 @@ const DASHBOARD_REALTIME_TABLES = [
   { table: "payments" },
   { table: "availability_slots" },
   { table: "portfolio_entries" },
+  // So "Ongoing" flips live the moment front desk clocks someone in/out,
+  // rather than only on the next poll — see OngoingIndicator above.
+  { table: "session_attendance" },
 ];
 
 // Behind app/admin/(protected)/layout.tsx's live session+admin check —
@@ -59,6 +62,7 @@ function StatTile({
   suffix,
   label,
   sublabel,
+  meta,
 }: {
   pattern: number[];
   display?: string;
@@ -66,6 +70,8 @@ function StatTile({
   suffix?: string;
   label: string;
   sublabel: string;
+  /** Optional small extra line under sublabel — currently only the Upcoming bookings tile's "Ongoing" indicator uses this. */
+  meta?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5">
@@ -76,7 +82,33 @@ function StatTile({
         </p>
         <p className="text-sm font-medium text-foreground">{label}</p>
         <p className="text-xs text-muted-foreground">{sublabel}</p>
+        {meta}
       </div>
+    </div>
+  );
+}
+
+/**
+ * "Ongoing: 1" / "Ongoing: 0" — whether a session is in the booth right now
+ * (clocked in, not yet clocked out). The studio has one booth, so this is a
+ * genuine 0-or-1 state, not a count that happens to usually be small; the
+ * dot pulses only when lit, same affordance as the front desk board's own
+ * "live" indicator (components/frontdesk/session-card.tsx's LiveDot).
+ */
+function OngoingIndicator({ count }: { count: number }) {
+  const live = count > 0;
+
+  return (
+    <div className="mt-1 flex items-center gap-1.5 text-xs">
+      <span
+        className={`size-1.5 shrink-0 rounded-full ${
+          live ? "animate-opacity-pulse bg-[var(--amber-glow)]" : "bg-muted-foreground/40"
+        }`}
+        aria-hidden="true"
+      />
+      <span className={live ? "font-medium text-[var(--amber-glow)]" : "text-muted-foreground"}>
+        Ongoing: {count}
+      </span>
     </div>
   );
 }
@@ -96,7 +128,8 @@ async function DashboardStats() {
         pattern={METER_PATTERNS[1]}
         value={stats.upcomingBookingsCount}
         label="Upcoming bookings"
-        sublabel="Deposited or paid in full"
+        sublabel="Deposited or paid, not yet started"
+        meta={<OngoingIndicator count={stats.ongoingSessionCount} />}
       />
       <StatTile
         pattern={METER_PATTERNS[2]}
