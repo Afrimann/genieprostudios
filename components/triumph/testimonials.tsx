@@ -63,7 +63,7 @@ function AnimatedQuote({ lines }: { lines: string[] }) {
       initial="hidden"
       whileInView="show"
       viewport={{ once: true, margin: "-80px 0px" }}
-      className="flex flex-col gap-1"
+      className="flex min-w-0 flex-col gap-1"
     >
       {lines.map((text, lineIndex) => (
         <p
@@ -71,7 +71,7 @@ function AnimatedQuote({ lines }: { lines: string[] }) {
           className="font-heading text-xl leading-snug font-medium text-white sm:text-2xl"
         >
           {Array.from(text).map((char, charIndex) => (
-            <motion.span key={charIndex} variants={letter} style={{ whiteSpace: "pre" }}>
+            <motion.span key={charIndex} variants={letter}>
               {char}
             </motion.span>
           ))}

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import type {
   PortfolioCategory,
   PortfolioPlatform,
@@ -35,9 +36,14 @@ export type PortfolioEntry = {
  * of this full published list (or, if pagination/server-side filtering is
  * ever needed, add a dedicated parameterized function rather than
  * overloading this one).
+ *
+ * Uses the cookie-less public client, not createClient() — this is a fully
+ * public, RLS-gated read with no notion of "as this user", and it must also
+ * work outside a request context (app/sitemap.ts, prerendered at build
+ * time, where next/headers' cookies() throws).
  */
 export async function getPublishedPortfolioEntries(): Promise<PortfolioEntry[]> {
-  const supabase = await createClient();
+  const supabase = createPublicClient();
 
   const { data, error } = await supabase
     .from("portfolio_entries")
