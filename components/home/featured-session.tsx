@@ -2,12 +2,12 @@ import { getPublishedPortfolioEntries } from "@/lib/repositories/portfolio-repos
 import { VideoEmbedFacade } from "@/components/portfolio/video-embed-facade";
 import { Reveal } from "@/components/ui/reveal";
 
-// The one "official video" style entry we deliberately lead with here — best
-// production value of the catalog, so it's the first thing a visitor sees
-// play. Falls back to whatever's first by display_order if it's ever
-// unpublished/removed, so this section never breaks because of a single
-// entry going away.
-const FEATURED_VIDEO_URL = "https://youtu.be/boGA3hV46eo";
+// The two clips we deliberately lead with here, shown side by side. Falls
+// back to the next available entries by display_order if either is ever
+// unpublished/removed, so this section never breaks because a single entry
+// goes away.
+const FEATURED_VIDEO_URL_PRIMARY = "https://youtu.be/5Oeoje1o3-k";
+const FEATURED_VIDEO_URL_SECONDARY = "https://youtu.be/aHrukNCriHw";
 
 /**
  * The "wide video, click to play" section requested for the home page —
@@ -25,8 +25,12 @@ export async function FeaturedSession() {
     return null;
   }
 
-  const featured =
-    entries.find((entry) => entry.video_id_or_url === FEATURED_VIDEO_URL) ?? entries[0];
+  const primary =
+    entries.find((entry) => entry.video_id_or_url === FEATURED_VIDEO_URL_PRIMARY) ?? entries[0];
+  const secondary =
+    entries.find((entry) => entry.video_id_or_url === FEATURED_VIDEO_URL_SECONDARY) ??
+    entries.find((entry) => entry.id !== primary.id) ??
+    primary;
 
   return (
     <section className="border-t border-border bg-background">
@@ -40,14 +44,19 @@ export async function FeaturedSession() {
           </h2>
         </div>
 
-        <VideoEmbedFacade
-          platform={featured.platform}
-          videoIdOrUrl={featured.video_id_or_url}
-          thumbnailUrl={featured.thumbnail_url}
-          title={featured.title}
-        />
-
-        <p className="text-sm text-muted-foreground">{featured.title}</p>
+        <div className="grid grid-cols-1 gap-0 sm:grid-cols-2">
+          {[primary, secondary].map((entry) => (
+            <div key={entry.id}>
+              <VideoEmbedFacade
+                platform={entry.platform}
+                videoIdOrUrl={entry.video_id_or_url}
+                thumbnailUrl={entry.thumbnail_url}
+                title={entry.title}
+              />
+              <p className="mt-2 text-sm text-muted-foreground">{entry.title}</p>
+            </div>
+          ))}
+        </div>
       </Reveal>
     </section>
   );
