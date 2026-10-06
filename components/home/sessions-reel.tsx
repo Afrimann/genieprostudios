@@ -3,10 +3,14 @@ import Link from "next/link";
 import { getPublishedPortfolioEntries } from "@/lib/repositories/portfolio-repository";
 import { VideoEmbedFacade } from "@/components/portfolio/video-embed-facade";
 import { Reveal } from "@/components/ui/reveal";
+import { SessionsCarousel } from "@/components/home/sessions-carousel";
 
-// The same one led with in FeaturedSession — excluded here so the two
-// sections never show the exact same clip twice on one page load.
-const FEATURED_VIDEO_URL = "https://youtu.be/boGA3hV46eo";
+// The same two led with in FeaturedSession — excluded here so the two
+// sections never show the exact same clips twice on one page load.
+const FEATURED_VIDEO_URLS = [
+  "https://youtu.be/5Oeoje1o3-k",
+  "https://youtu.be/aHrukNCriHw",
+];
 
 // Alternating tilt per card — "photos pinned to a corkboard" rather than a
 // flat repeated grid, per the "fun and graphical" direction. Cycles rather
@@ -33,7 +37,7 @@ const SELECTION_SIZE = 6;
 export async function SessionsReel() {
   const entries = await getPublishedPortfolioEntries();
   const selection = entries
-    .filter((entry) => entry.video_id_or_url !== FEATURED_VIDEO_URL)
+    .filter((entry) => !FEATURED_VIDEO_URLS.includes(entry.video_id_or_url))
     .slice(0, SELECTION_SIZE);
 
   if (selection.length === 0) {
@@ -41,7 +45,7 @@ export async function SessionsReel() {
   }
 
   return (
-    <section className="overflow-hidden border-t border-border bg-card">
+    <section className="border-t border-border bg-card">
       <Reveal className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-24">
         <div className="flex flex-col gap-3">
           <span className="text-xs font-medium tracking-[0.2em] text-[var(--amber-glow)] uppercase">
@@ -52,7 +56,7 @@ export async function SessionsReel() {
           </h2>
         </div>
 
-        <div className="scrollbar-hide -mx-6 flex gap-6 overflow-x-auto px-6 py-6">
+        <SessionsCarousel>
           {selection.map((entry, i) => (
             <div
               key={entry.id}
@@ -76,7 +80,7 @@ export async function SessionsReel() {
             <span>See all the work</span>
             <span aria-hidden="true">→</span>
           </Link>
-        </div>
+        </SessionsCarousel>
       </Reveal>
     </section>
   );
