@@ -43,7 +43,7 @@ export function koboToNaira(amountKobo: KoboAmount): number {
 /**
  * Client-side display-only deposit estimate: 70% of total, rounded up to
  * the nearest kobo, matching Postgres's `ceil(price_kobo * 0.7)` in the
- * book_slot_and_create_booking RPC (see supabase/migrations/0013_book_slot_rpc.sql).
+ * book_session RPC (see supabase/migrations/0037_book_session.sql).
  *
  * IMPORTANT: this is for showing the customer an accurate "you'll pay ~₦X
  * deposit" figure before they book — it must NEVER be sent to the RPC as a

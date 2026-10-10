@@ -48,6 +48,26 @@ function formatTimeRange(start: string, end: string): string {
   return `${start.slice(0, 5)} – ${end.slice(0, 5)}`;
 }
 
+/**
+ * "Oct 10, 11:00 PM – Oct 11, 2:00 AM" when sessionEndDate differs from
+ * sessionDate (an overnight session crossing midnight — see
+ * bookings.session_end_date, 0036_blocked_time_ranges.sql), else the plain
+ * single-date "11:00 – 18:00" format — mirrors
+ * lib/services/email-service.ts's formatSessionLine convention.
+ */
+function formatSessionTime(
+  sessionDate: string,
+  start: string,
+  end: string,
+  sessionEndDate: string | null,
+): string {
+  if (sessionEndDate && sessionEndDate !== sessionDate) {
+    return `${start.slice(0, 5)} (${sessionDate}) – ${end.slice(0, 5)} (${sessionEndDate})`;
+  }
+
+  return formatTimeRange(start, end);
+}
+
 function DetailCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5">
@@ -117,17 +137,16 @@ async function BookingDetail({ id }: { id: string }) {
               <Field label="Date" value={booking.sessionDate} />
               <Field
                 label="Time"
-                value={formatTimeRange(booking.sessionStartTime, booking.sessionEndTime)}
+                value={formatSessionTime(
+                  booking.sessionDate,
+                  booking.sessionStartTime,
+                  booking.sessionEndTime,
+                  booking.sessionEndDate,
+                )}
               />
             </>
           ) : (
             <Field label="Studio time" value="Not applicable — per-song add-on" />
-          )}
-          {booking.window && (
-            <Field
-              label="Window"
-              value={`${formatTimeRange(booking.window.startTime, booking.window.endTime)} (${booking.window.status})`}
-            />
           )}
         </DetailCard>
 

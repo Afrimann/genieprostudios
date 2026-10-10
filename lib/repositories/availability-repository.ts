@@ -1,309 +1,208 @@
 import { createClient } from "@/lib/supabase/server";
 import type { Booking } from "@/lib/services/booking-service";
 
-// Mirrors public.availability_slots (see supabase/migrations/0003_availability_slots.sql).
-export type AvailabilityStatus = "open" | "booked" | "closed";
-
-export type AvailabilitySlot = {
+// Mirrors public.blocked_time_ranges (see
+// supabase/migrations/0036_blocked_time_ranges.sql). Replaces the old
+// availability_slots "admin opens a window" model: every date is open by
+// default, 00:00-23:59 — a row here marks a specific time range on a
+// specific date as CLOSED. No status enum: a row's existence IS the
+// closure. Admin-only (customers never query this table directly;
+// book_session enforces blocks server-side, see 0037_book_session.sql).
+export type BlockedTimeRange = {
   id: string;
   date: string; // ISO date (YYYY-MM-DD)
   start_time: string; // HH:MM:SS
   end_time: string; // HH:MM:SS
-  status: AvailabilityStatus;
+  reason: string | null;
   created_by: string | null;
   created_at: string;
 };
 
 // ---------------------------------------------------------------------------
-// Customer-facing reads. Rely entirely on the existing RLS policy
-// "availability_slots_select_open_public" (0010), which already restricts
-// anon/authenticated SELECT to status = 'open' rows — the explicit
-// .eq("status", "open") filters below are defense-in-depth/clarity, not the
-// actual security boundary.
+// Admin-only reads/writes. Rely entirely on the blocked_time_ranges_*_admin
+// RLS policies (0036), which gate on public.is_admin() — NOT on the
+// book_session RPC. This repository must only ever be called from
+// admin-authenticated contexts; it does not itself re-check admin status
+// (dumb data access, no business rules in the repository layer per
+// project-notes.md).
 // ---------------------------------------------------------------------------
 
 /**
- * Returns the distinct dates within [startDate, endDate] (inclusive, ISO
- * "YYYY-MM-DD") that have at least one open slot. Intended for
- * calendar-disabling logic on the customer-facing date picker: only dates
- * returned here should be selectable, everything else greyed out.
+ * Returns every block for a single date (ISO "YYYY-MM-DD"), ordered by
+ * start_time — the list the admin UI shows alongside "Block a time range"
+ * for that day.
  */
-export async function getOpenDatesInRange(
-  startDate: string,
-  endDate: string,
-): Promise<string[]> {
+export async function getBlocksForDate(date: string): Promise<BlockedTimeRange[]> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
-    .from("availability_slots")
-    .select("date")
-    .eq("status", "open")
-    .gte("date", startDate)
-    .lte("date", endDate)
-    .order("date", { ascending: true });
-
-  if (error) {
-    throw new Error(`getOpenDatesInRange: ${error.message}`);
-  }
-
-  const distinctDates = Array.from(new Set((data ?? []).map((row) => row.date)));
-  return distinctDates;
-}
-
-/**
- * Returns all open slots for a single date (ISO "YYYY-MM-DD"), ordered by
- * start_time — the list a customer picks a time slot from once they've
- * selected a date.
- */
-export async function getOpenSlotsForDate(date: string): Promise<AvailabilitySlot[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("availability_slots")
-    .select("*")
-    .eq("status", "open")
-    .eq("date", date)
-    .order("start_time", { ascending: true });
-
-  if (error) {
-    throw new Error(`getOpenSlotsForDate: ${error.message}`);
-  }
-
-  return data ?? [];
-}
-
-// ---------------------------------------------------------------------------
-// Admin-side reads/writes. Rely entirely on the existing admin RLS policies
-// (availability_slots_select_admin / _insert_admin / _update_admin, 0010),
-// which gate on public.is_admin() — NOT on the book_slot_and_create_booking
-// RPC. This repository must only ever be called from admin-authenticated
-// contexts; it does not itself re-check admin status (that's what the DB
-// policies are for — dumb data access, no business rules in the repository
-// layer per project-notes.md).
-// ---------------------------------------------------------------------------
-
-/**
- * Returns ALL slots (open/booked/closed) for a given date, ordered by
- * start_time. Needed by the admin UI so the owner can see everything
- * already on the calendar for that day, not just what's still open —
- * e.g. to avoid re-opening a time that's already booked or closed.
- */
-export async function getSlotsForDate(date: string): Promise<AvailabilitySlot[]> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("availability_slots")
+    .from("blocked_time_ranges")
     .select("*")
     .eq("date", date)
     .order("start_time", { ascending: true });
 
   if (error) {
-    throw new Error(`getSlotsForDate: ${error.message}`);
+    throw new Error(`getBlocksForDate: ${error.message}`);
   }
 
   return data ?? [];
 }
 
-/**
- * Targeted single-window read by id — needed by
- * lib/services/availability-service.ts's getValidStartTimesForWindow, which
- * only needs one window's own bounds and shouldn't have to know the window's
- * date ahead of time just to look it up (getSlotsForDate requires a date).
- * Returns null if the window doesn't exist, rather than throwing, so callers
- * can distinguish "not found" from a genuine query failure.
- *
- * Relies on RLS: an admin caller sees any window (availability_slots_
- * select_admin), a customer-authenticated/anon caller only sees it if it's
- * currently 'open' (availability_slots_select_open_public, 0010) — same
- * reliance as every other read in this file.
- */
-export async function getSlotById(slotId: string): Promise<AvailabilitySlot | null> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("availability_slots")
-    .select("*")
-    .eq("id", slotId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`getSlotById: ${error.message}`);
-  }
-
-  return data ?? null;
-}
-
-export type CreateSlotInput = {
+export type CreateBlockInput = {
   date: string; // ISO "YYYY-MM-DD"
   startTime: string; // "HH:MM" or "HH:MM:SS"
   endTime: string; // "HH:MM" or "HH:MM:SS"
+  reason?: string | null;
 };
 
 /**
- * Inserts a new availability slot with status='open'. Pure data access —
- * does NOT enforce the 30-minute buffer rule; that validation belongs in
- * lib/services/availability-service.ts (createSlotWithBufferCheck), which
- * calls this function only after the buffer check passes. Relies on the
- * admin RLS insert policy + the (date, start_time) unique constraint for
- * DB-level guarantees.
+ * Inserts a new block. Pure data access — does NOT enforce the 30-minute
+ * buffer rule or any overlap check against existing blocks/bookings; that
+ * validation (if any is ever needed for blocks specifically) belongs in
+ * lib/services/availability-service.ts, which calls this function only
+ * after any such check passes. Unlike the old createSlot, a block has no
+ * buffer requirement against adjacent blocks today — the buffer only ever
+ * applied between bookable windows, and blocks are the inverse concept
+ * (closures), so two blocks may legitimately sit back-to-back or even
+ * overlap with no correctness issue.
  */
-export async function createSlot(input: CreateSlotInput): Promise<AvailabilitySlot> {
+export async function createBlock(input: CreateBlockInput): Promise<BlockedTimeRange> {
   const supabase = await createClient();
 
+  const { data: userData } = await supabase.auth.getUser();
+
   const { data, error } = await supabase
-    .from("availability_slots")
+    .from("blocked_time_ranges")
     .insert({
       date: input.date,
       start_time: input.startTime,
       end_time: input.endTime,
-      status: "open",
+      reason: input.reason ?? null,
+      created_by: userData?.user?.id ?? null,
     })
     .select("*")
     .single();
 
   if (error) {
-    throw new Error(`createSlot: ${error.message}`);
+    throw new Error(`createBlock: ${error.message}`);
   }
 
   return data;
 }
 
 /**
- * Closes a slot (status -> 'closed'). Only valid as a transition from
- * 'open' — the WHERE clause guards against closing a 'booked' slot via
- * this path (a booked slot represents real studio time already committed
- * to a customer; withdrawing it here would silently orphan that booking's
- * link to an availability row without cancelling the booking itself, which
- * is a business decision this repository must not make unilaterally).
- *
- * Returns the updated row, or null if no row matched (already
- * booked/closed, or doesn't exist) so the caller can distinguish "closed
- * successfully" from "nothing happened".
+ * Deletes a block by id (removing a closure re-opens that time range
+ * immediately — there is no "undo" state to manage, unlike the old
+ * open/booked/closed slot status machine). Returns true if a row was
+ * actually deleted, false if no row matched (already removed, or never
+ * existed), so the caller can distinguish "removed successfully" from
+ * "nothing happened" without needing a second lookup.
  */
-export async function closeSlot(slotId: string): Promise<AvailabilitySlot | null> {
+export async function deleteBlock(blockId: string): Promise<boolean> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
-    .from("availability_slots")
-    .update({ status: "closed" })
-    .eq("id", slotId)
-    .eq("status", "open")
-    .select("*")
+    .from("blocked_time_ranges")
+    .delete()
+    .eq("id", blockId)
+    .select("id")
     .maybeSingle();
 
   if (error) {
-    throw new Error(`closeSlot: ${error.message}`);
+    throw new Error(`deleteBlock: ${error.message}`);
   }
 
-  return data ?? null;
+  return data !== null;
 }
 
 // ---------------------------------------------------------------------------
-// Booking windows (0014): a window ("slot") can now back multiple
-// non-overlapping bookings, so both admin and service-layer callers need to
-// read the bookings already carved from a given window.
+// Bookings overlapping a date range — the "open by default" model's
+// equivalent of the old getBookingsForSlot (keyed by slot_id). Both the
+// customer-facing advisory start-time computation and the admin UI's
+// "what's already booked on this date" display need this, keyed by date
+// range (not slot_id, which no longer exists — see 0036).
 // ---------------------------------------------------------------------------
 
-export type SlotBookingRow = Pick<
+export type DateRangeBookingRow = Pick<
   Booking,
-  "id" | "session_start_time" | "session_end_time" | "status" | "created_at"
+  | "id"
+  | "session_date"
+  | "session_start_time"
+  | "session_end_date"
+  | "session_end_time"
+  | "status"
+  | "created_at"
 >;
 
 /**
- * Returns the bookings already carved from a single window (any status —
- * callers that only care about "still occupies time" must filter out
- * cancelled/auto_cancelled themselves, same convention as getSlotsForDate
- * returning all statuses for the admin view).
+ * Returns every non-addon booking whose session_date falls within
+ * [startDate, endDate] (inclusive, ISO "YYYY-MM-DD") — any status; callers
+ * that only care about "still occupies time" must filter out
+ * cancelled/auto_cancelled (and age out stale pending_deposit rows)
+ * themselves, same convention the old getBookingsForSlot used.
+ *
+ * Callers computing overlap for a single target date should pass
+ * [targetDate - 1, targetDate + 1] (or similar) so a booking that starts
+ * the evening before or runs into the morning after is still caught — see
+ * lib/services/availability-service.ts's computeValidStartTimes, which is
+ * the actual overlap-computation consumer of this read.
  *
  * Relies on RLS: bookings_select_admin (admin, all rows) and
  * bookings_select_own (customer, only their own bookings) both gate on
  * public.is_admin()/customer_id = auth.uid() respectively (0010) — this
- * repository adds no extra filtering beyond slot_id, matching the
- * established "dumb data access" convention in this file.
- *
- * Pure data access — the overlap/grid computation that consumes this belongs
- * in lib/services/availability-service.ts, not here.
+ * repository adds no extra filtering beyond the date range, matching the
+ * established "dumb data access" convention in this file. A customer-
+ * authenticated caller therefore only ever sees their OWN bookings via this
+ * read — fine for the booking flow's advisory start-time computation (it
+ * only needs to know which of ITS OWN candidate ranges would collide with
+ * something it's already committed to), but the real security boundary is
+ * always book_session's own server-side overlap check against the FULL
+ * bookings table (via SECURITY DEFINER), never this advisory read.
  */
-export async function getBookingsForSlot(slotId: string): Promise<SlotBookingRow[]> {
+export async function getBookingsForDateRange(
+  startDate: string,
+  endDate: string,
+): Promise<DateRangeBookingRow[]> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("bookings")
-    .select("id, session_start_time, session_end_time, status, created_at")
-    .eq("slot_id", slotId)
+    .select("id, session_date, session_start_time, session_end_date, session_end_time, status, created_at")
+    .gte("session_date", startDate)
+    .lte("session_date", endDate)
+    .not("session_date", "is", null)
+    .order("session_date", { ascending: true })
     .order("session_start_time", { ascending: true });
 
   if (error) {
-    throw new Error(`getBookingsForSlot: ${error.message}`);
+    throw new Error(`getBookingsForDateRange: ${error.message}`);
   }
 
   return data ?? [];
 }
 
-export type SlotWithBookings = AvailabilitySlot & {
-  bookings: SlotBookingRow[];
+export type DateWithBlocksAndBookings = {
+  date: string;
+  blocks: BlockedTimeRange[];
+  bookings: DateRangeBookingRow[];
 };
 
 /**
- * Admin-only: all slots (any status) for a given date, each with its own
- * bookings nested underneath (ordered by session_start_time), so the admin
- * availability UI can render "window -> its bookings" without a client-side
- * join.
- *
- * Implementation: reuses getSlotsForDate for the window list, then issues
- * one additional query for every booking whose slot_id is one of those
- * windows' ids (a single `in (...)` query, not N+1), and assembles the
- * nested shape here. This read-shaping is simple enough (no business rules,
- * just grouping rows that are already fully authorized by RLS) to keep in
- * the repository per this file's existing convention — if it ever grows
- * business logic (e.g. filtering/deriving availability from the nested
- * bookings), that belongs in availability-service.ts instead, not here.
- *
- * Relies entirely on the existing admin RLS policies (availability_slots_
- * select_admin, bookings_select_admin, both gating on public.is_admin(),
- * 0010) — same as every other admin read in this file. Do not call this from
- * a non-admin-authenticated context.
+ * Admin-only: a single date's blocks plus every booking overlapping that
+ * date (via getBookingsForDateRange, queried [date, date] — the admin UI
+ * only ever looks at one date at a time, unlike the advisory service-layer
+ * computation which needs the adjoining date too). Backs the admin
+ * availability UI's "blocks for this date" + "bookings overlapping this
+ * date" display, replacing the old getSlotsForDateWithBookings' nested
+ * window -> bookings shape (there is no nesting relationship anymore —
+ * blocks and bookings are both flat, independent lists against the same
+ * date).
  */
-export async function getSlotsForDateWithBookings(date: string): Promise<SlotWithBookings[]> {
-  const slots = await getSlotsForDate(date);
+export async function getBlocksAndBookingsForDate(date: string): Promise<DateWithBlocksAndBookings> {
+  const [blocks, bookings] = await Promise.all([
+    getBlocksForDate(date),
+    getBookingsForDateRange(date, date),
+  ]);
 
-  if (slots.length === 0) {
-    return [];
-  }
-
-  const supabase = await createClient();
-  const slotIds = slots.map((slot) => slot.id);
-
-  const { data, error } = await supabase
-    .from("bookings")
-    .select("id, slot_id, session_start_time, session_end_time, status, created_at")
-    .in("slot_id", slotIds)
-    .order("session_start_time", { ascending: true });
-
-  if (error) {
-    throw new Error(`getSlotsForDateWithBookings: ${error.message}`);
-  }
-
-  const bookingsBySlotId = new Map<string, SlotBookingRow[]>();
-  for (const booking of data ?? []) {
-    const existing = bookingsBySlotId.get(booking.slot_id);
-    const row: SlotBookingRow = {
-      id: booking.id,
-      session_start_time: booking.session_start_time,
-      session_end_time: booking.session_end_time,
-      status: booking.status,
-      created_at: booking.created_at,
-    };
-
-    if (existing) {
-      existing.push(row);
-    } else {
-      bookingsBySlotId.set(booking.slot_id, [row]);
-    }
-  }
-
-  return slots.map((slot) => ({
-    ...slot,
-    bookings: bookingsBySlotId.get(slot.id) ?? [],
-  }));
+  return { date, blocks, bookings };
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,7 +24,6 @@ const fieldIconClass =
   "pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground";
 
 export function SignUpForm({ redirectTo, reason }: SignUpFormProps) {
-  const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
@@ -47,9 +45,15 @@ export function SignUpForm({ redirectTo, reason }: SignUpFormProps) {
       return;
     }
 
+    // A real browser navigation, not router.push() — see login-form.tsx's
+    // identical fix for the full explanation. Same stale-Router-Cache bug
+    // applies here: without this, a fresh sign-up can land back on
+    // /sign-up's own protected destination's login bounce instead of
+    // actually proceeding.
+    //
     // Never push `redirectTo` raw — it comes straight from a URL search
     // param an attacker controls. See lib/utils/safe-redirect.ts.
-    router.push(safeRedirectPath(redirectTo));
+    window.location.href = safeRedirectPath(redirectTo);
   }
 
   return (

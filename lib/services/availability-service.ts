@@ -1,39 +1,23 @@
 import {
-  createSlot,
-  getBookingsForSlot,
-  getSlotById,
-  getSlotsForDate,
-  type AvailabilitySlot,
-  type CreateSlotInput,
+  createBlock,
+  getBlocksForDate,
+  getBookingsForDateRange,
+  type BlockedTimeRange,
+  type CreateBlockInput,
+  type DateRangeBookingRow,
 } from "@/lib/repositories/availability-repository";
 import { getServiceById } from "@/lib/repositories/service-repository";
+import { lagosToday } from "@/lib/utils/lagos-time";
 
-// Mandatory setup/teardown buffer the owner requires between any two slots
-// on the same date, per project-notes.md ("30-minute mandatory setup buffer
-// between booked slots") — applies regardless of the existing slot's
-// status (open/booked/closed all physically occupy or reserve studio time
-// for that window), not just booked ones.
+// Mandatory setup/teardown buffer the owner requires between any two
+// bookings (or a booking and an admin-marked block), per project-notes.md
+// ("30-minute mandatory setup buffer between booked slots"). Unchanged by
+// the open-by-default model flip — still advisory-only here, the RPC
+// (book_session, supabase/migrations/0037_book_session.sql) remains the
+// real boundary.
 export const SLOT_BUFFER_MINUTES = 30;
 
-// How long a 'pending_deposit' booking (created but never paid) still
-// counts as occupying its time range, mirrored in
-// supabase/migrations/0018_pending_deposit_age_limit.sql's
-// v_pending_hold_minutes — must match. Only 'pending_deposit' ages out this
-// way; 'deposited'/'paid_in_full' always block regardless of age, since
-// real money has landed on them.
-export const PENDING_DEPOSIT_HOLD_MINUTES = 20;
-
 type TimeLike = string; // "HH:MM" or "HH:MM:SS"
-
-export type ProposedSlot = {
-  date: string;
-  startTime: TimeLike;
-  endTime: TimeLike;
-};
-
-export type BufferCheckResult =
-  | { ok: true }
-  | { ok: false; reason: string };
 
 /**
  * Converts "HH:MM" or "HH:MM:SS" to minutes-since-midnight for arithmetic.
@@ -58,53 +42,89 @@ function timeToMinutes(time: TimeLike): number {
   return hours * 60 + minutes;
 }
 
+/** The calendar day after a `YYYY-MM-DD` string. Pure date arithmetic, no timezone involved. */
+function nextCalendarDay(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+}
+
+/** The calendar day before a `YYYY-MM-DD` string. Pure date arithmetic, no timezone involved. */
+function previousCalendarDay(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day - 1)).toISOString().slice(0, 10);
+}
+
 /**
- * Pure, unit-testable core of the buffer rule: given the slots that already
- * exist on a date (any status) and a proposed new slot for that same date,
- * returns whether the proposed slot keeps at least SLOT_BUFFER_MINUTES of
- * clearance from every existing slot's start/end.
+ * Minutes-since-midnight-of-`baseDate` for a (date, time) pair, allowing
+ * the result to run negative when `date` is the day BEFORE `baseDate`, or
+ * past 1440 when `date` is the day AFTER `baseDate` — the same "plain
+ * timestamp, not time-of-day" arithmetic book_session (0037) uses in SQL,
+ * reimplemented here so the advisory JS computation can reason about a
+ * range that spans midnight (in either direction) without wrapping. Only
+ * ever called with `date` equal to `baseDate` or one of the two calendar
+ * days immediately adjacent to it (the only three days any of this
+ * module's computations ever consider — mirroring book_session's own
+ * `p_date - 1 .. v_end_date` window), so a plain day-count multiply is
+ * sufficient — no general calendar math needed.
+ */
+function toOffsetMinutes(baseDate: string, date: string, time: TimeLike): number {
+  const dayOffset = date === baseDate ? 0 : date < baseDate ? -1 : 1;
+  return dayOffset * 24 * 60 + timeToMinutes(time);
+}
+
+export type BufferCheckResult = { ok: true } | { ok: false; reason: string };
+
+/**
+ * Pure, unit-testable core of the block-overlap rule: given the blocks that
+ * exist on a target date AND the next calendar date (a block sitting on the
+ * following day can still collide with a session starting late the night
+ * before and running into it), and a proposed range anchored to the target
+ * date, returns whether the proposed range keeps at least
+ * SLOT_BUFFER_MINUTES of clearance from every block.
  *
- * Overlap check: pad each existing slot's [start, end] window by the buffer
- * on both sides, then reject the proposal if its own [start, end] window
- * intersects that padded window. Padding both sides (existing slot AND
- * implicitly the proposed slot, since a symmetric pad on one side is
- * equivalent to padding both and comparing raw ranges) guarantees the true
- * gap between any existing slot and the proposed one is >= buffer minutes,
- * not just >= buffer/2.
+ * `proposed.endDate` lets the proposed range itself span midnight (an
+ * overnight booking candidate) — when absent, it's assumed to equal
+ * `proposed.date` (a same-day proposal), matching computeValidStartTimes'
+ * candidates below.
  *
- * Takes plain data in/out (no Supabase calls) specifically so it can be
- * unit-tested without a database or mocks.
+ * All offsets are computed relative to `proposed.date` via
+ * toOffsetMinutes, so a block on the day after `proposed.date` lands in the
+ * [1440, 2880) range rather than wrapping back to [0, 1440) — this is what
+ * makes the overlap comparison correct across the midnight boundary, the
+ * same fix book_session's SQL applies via plain timestamp arithmetic
+ * instead of raw `time` values.
  */
 export function checkSlotBuffer(
-  existingSlots: Pick<AvailabilitySlot, "date" | "start_time" | "end_time" | "status">[],
-  proposed: ProposedSlot,
+  blocks: Pick<BlockedTimeRange, "date" | "start_time" | "end_time" | "reason">[],
+  proposed: { date: string; startTime: TimeLike; endDate?: string; endTime: TimeLike },
 ): BufferCheckResult {
-  const proposedStart = timeToMinutes(proposed.startTime);
-  const proposedEnd = timeToMinutes(proposed.endTime);
+  const anchorDate = proposed.date;
+  const endDate = proposed.endDate ?? proposed.date;
+
+  const proposedStart = toOffsetMinutes(anchorDate, anchorDate, proposed.startTime);
+  const proposedEnd = toOffsetMinutes(anchorDate, endDate, proposed.endTime);
 
   if (proposedEnd <= proposedStart) {
     return { ok: false, reason: "End time must be after start time." };
   }
 
-  const sameDateSlots = existingSlots.filter((slot) => slot.date === proposed.date);
+  const relevantBlocks = blocks.filter(
+    (block) => block.date === anchorDate || block.date === endDate,
+  );
 
-  for (const slot of sameDateSlots) {
-    const existingStart = timeToMinutes(slot.start_time);
-    const existingEnd = timeToMinutes(slot.end_time);
+  for (const block of relevantBlocks) {
+    const blockStart = toOffsetMinutes(anchorDate, block.date, block.start_time);
+    const blockEnd = toOffsetMinutes(anchorDate, block.date, block.end_time);
 
-    // Pad the existing slot's window by the buffer on both sides, then
-    // check for intersection with the proposed (unpadded) window. This is
-    // mathematically equivalent to requiring >= buffer minutes of gap on
-    // whichever side the two slots are adjacent from.
-    const paddedStart = existingStart - SLOT_BUFFER_MINUTES;
-    const paddedEnd = existingEnd + SLOT_BUFFER_MINUTES;
+    const paddedStart = blockStart - SLOT_BUFFER_MINUTES;
+    const paddedEnd = blockEnd + SLOT_BUFFER_MINUTES;
 
     const overlaps = proposedStart < paddedEnd && proposedEnd > paddedStart;
 
     if (overlaps) {
       return {
         ok: false,
-        reason: `Too close to an existing ${slot.status} slot (${slot.start_time}-${slot.end_time}). A ${SLOT_BUFFER_MINUTES}-minute buffer is required between slots.`,
+        reason: `This time is blocked${block.reason ? ` (${block.reason})` : ""} (${block.start_time.slice(0, 5)}-${block.end_time.slice(0, 5)} on ${block.date}). A ${SLOT_BUFFER_MINUTES}-minute buffer is required around a blocked range.`,
       };
     }
   }
@@ -112,155 +132,242 @@ export function checkSlotBuffer(
   return { ok: true };
 }
 
-export type CreateSlotWithBufferCheckResult =
-  | { success: true; slot: AvailabilitySlot }
-  | { success: false; error: "buffer_violation"; message: string }
+export type CreateBlockWithOverlapCheckResult =
+  | { success: true; block: BlockedTimeRange }
+  | { success: false; error: "overlap_violation"; message: string }
   | { success: false; error: "unknown"; message: string };
 
 /**
- * Admin-side orchestration: validates the 30-minute buffer rule against
- * every existing slot for that date (open/booked/closed — fetched via the
- * admin "all slots" repository read, not just open ones) before calling the
- * repository to actually insert. Returns a validation failure instead of
- * calling the repository at all when the buffer check fails.
+ * Admin-side orchestration for creating a block. Unlike the old
+ * createSlotWithBufferCheck, this does NOT reject a block that overlaps an
+ * existing block — two closures overlapping is harmless (the time is
+ * closed either way) — but it DOES still warn/fail if the admin tries to
+ * block a time that would collide with an existing, still-live booking's
+ * buffer zone, since blocking that range wouldn't actually prevent the
+ * booking from using it; the owner needs to know the block has no teeth
+ * there rather than assume it silently worked. Checked against both the
+ * target date and the day before (a booking starting late the previous
+ * evening could run into this date's early hours).
  */
-export async function createSlotWithBufferCheck(
-  input: CreateSlotInput,
-): Promise<CreateSlotWithBufferCheckResult> {
+export async function createBlockWithOverlapCheck(
+  input: CreateBlockInput,
+): Promise<CreateBlockWithOverlapCheckResult> {
   try {
-    const existingSlots = await getSlotsForDate(input.date);
+    const previousDate = (() => {
+      const [year, month, day] = input.date.split("-").map(Number);
+      return new Date(Date.UTC(year, month - 1, day - 1)).toISOString().slice(0, 10);
+    })();
 
-    const bufferResult = checkSlotBuffer(existingSlots, {
-      date: input.date,
-      startTime: input.startTime,
-      endTime: input.endTime,
+    const existingBookings = await getBookingsForDateRange(previousDate, input.date);
+
+    const activeBookings = filterActiveBookings(existingBookings);
+
+    const collides = activeBookings.some((booking) => {
+      if (
+        !booking.session_date ||
+        !booking.session_start_time ||
+        !booking.session_end_date ||
+        !booking.session_end_time
+      ) {
+        // Null session_* fields mean an is_addon booking (no studio room
+        // time reserved, see 0036_blocked_time_ranges.sql's consistency
+        // check) — never collides with a block.
+        return false;
+      }
+
+      const anchorDate = input.date;
+      const blockStart = toOffsetMinutes(anchorDate, anchorDate, input.startTime);
+      const blockEnd = toOffsetMinutes(anchorDate, anchorDate, input.endTime);
+
+      const bookingStart = toOffsetMinutes(anchorDate, booking.session_date, booking.session_start_time);
+      const bookingEnd = toOffsetMinutes(anchorDate, booking.session_end_date, booking.session_end_time);
+
+      return blockStart < bookingEnd && blockEnd > bookingStart;
     });
 
-    if (!bufferResult.ok) {
-      return { success: false, error: "buffer_violation", message: bufferResult.reason };
+    if (collides) {
+      return {
+        success: false,
+        error: "overlap_violation",
+        message: "This time range overlaps an existing booking and cannot be blocked.",
+      };
     }
 
-    const slot = await createSlot(input);
-    return { success: true, slot };
+    const block = await createBlock(input);
+    return { success: true, block };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to create slot.";
+    const message = err instanceof Error ? err.message : "Failed to create block.";
     return { success: false, error: "unknown", message };
   }
 }
 
 // ---------------------------------------------------------------------------
-// Booking windows (0014): a window is now a continuous block the customer
-// picks a start time inside, rather than a single pre-cut slot. The
-// functions below are the service-layer, UI-supporting equivalent of the
-// grid/overlap validation that book_slot_and_create_booking
-// (supabase/migrations/0014_booking_windows.sql) also enforces server-side
-// inside the RPC. THESE FUNCTIONS ARE ADVISORY ONLY — they exist so the UI
-// can offer only valid start-time buttons and fail fast with a friendly
-// message before round-tripping to the RPC, but they are NOT a security
-// boundary. A direct RPC call bypassing this computation entirely must still
-// be rejected correctly by the RPC's own bounds/grid/overlap checks; never
-// remove or weaken those checks on the assumption that "the UI already only
-// offers valid options."
+// Open-by-default start-time computation (0036/0037): every date is open
+// 00:00-23:59 by default; bounds are the full day's 30-minute grid rather
+// than a single admin-opened window. THESE FUNCTIONS ARE ADVISORY ONLY —
+// same discipline as before: the UI uses this to offer only valid
+// start-time buttons and fail fast with a friendly message, but
+// book_session (0037) independently re-validates everything server-side.
+// Never remove or weaken the RPC's own checks on the assumption that "the
+// UI already only offers valid options."
 // ---------------------------------------------------------------------------
 
-export type StartTimeOption = { startTime: string; endTime: string };
-
-type MinimalBookingForOverlap = {
-  session_start_time: string;
-  session_end_time: string;
-  status: string;
-  created_at: string;
-};
+export type StartTimeOption = { startTime: string; endTime: string; endDate: string };
 
 /**
- * Pure, unit-testable core of the "which start times can the customer pick"
- * rule: given a window and the service's duration, generates every
- * 30-minute-grid-aligned candidate start time from window.start_time up to
- * (and including) the latest start that still leaves room for the full
- * duration before window.end_time, then filters out any candidate whose
- * [start, start+duration] range, padded by SLOT_BUFFER_MINUTES on both
- * sides, overlaps an existing non-cancelled booking already carved from this
- * window.
+ * Filters out every booking that hasn't actually been paid for yet.
+ * 'pending_deposit' never occupies time, for any amount of time — a
+ * customer who reaches the summary step but never pays must not block
+ * another customer from booking that time, even for a minute. Only
+ * 'deposited'/'paid_in_full' block, since real money has landed on them;
+ * 'cancelled'/'auto_cancelled' never block either way. Mirrors
+ * book_session's SQL overlap predicate exactly (0040_no_pending_hold.sql).
+ */
+function filterActiveBookings(bookings: DateRangeBookingRow[]): DateRangeBookingRow[] {
+  return bookings.filter(
+    (booking) => booking.status === "deposited" || booking.status === "paid_in_full",
+  );
+}
+
+/**
+ * Pure, unit-testable core of "which start times can the customer pick on
+ * this date" — the open-by-default replacement for the old window-scoped
+ * computeValidStartTimes. Bounds are the full day: every 30-minute-grid
+ * candidate from 00:00 up to 23:30 (the latest grid mark in a day,
+ * regardless of whether the resulting session spans into the next day —
+ * an overnight session is explicitly supported, not excluded).
  *
- * cancelled/auto_cancelled bookings are excluded from the overlap check
- * entirely (they no longer occupy real studio time), and a pending_deposit
- * booking stops counting once it's older than PENDING_DEPOSIT_HOLD_MINUTES
- * (no successful payment ever landed on it in that time) — mirroring the
- * same exclusions in the RPC's SQL overlap predicate
- * (0018_pending_deposit_age_limit.sql).
+ * `blocks` must include rows from BOTH the target date and the next
+ * calendar date — a late candidate start time can run into a block sitting
+ * on the day after `date` — matching book_session's own blocked_time_ranges
+ * check, which only ever queries `bt.date in (p_date, v_end_date)` (0037
+ * line ~153), never the day before.
  *
- * Takes plain data in/out (no Supabase calls) specifically so it can be
- * unit-tested without a database or mocks — same style as checkSlotBuffer.
+ * `existingBookings`, however, must include rows from the PREVIOUS calendar
+ * date as well as the target date and the next calendar date (a 3-day
+ * window) — a booking that started the evening before `date` can still be
+ * running into `date`'s early hours, and book_session's own overlap check
+ * queries exactly this wider `session_date between p_date - 1 and
+ * v_end_date` range (0037 line ~175). Without the previous day included
+ * here, this advisory check would offer an early-morning start time that
+ * the RPC would then correctly reject — a confusing failed-booking UX for a
+ * slot the UI claimed was free.
+ *
+ * This function does not fetch anything itself (pure data in/out, same
+ * discipline as the pre-0036 version, so it stays testable without a
+ * database or mocks).
+ *
+ * `now`/`isToday` exclude any candidate start time that's already in the
+ * past when `date` is today in Lagos — the RPC itself also rejects a past
+ * start time (book_session's start_in_past check), but doing it here too
+ * means the UI never even offers a dead button for today's already-passed
+ * slots.
  */
 export function computeValidStartTimes(
-  window: Pick<AvailabilitySlot, "start_time" | "end_time">,
+  date: string,
   durationHours: number,
-  existingBookings: MinimalBookingForOverlap[],
+  blocks: Pick<BlockedTimeRange, "date" | "start_time" | "end_time" | "reason">[],
+  existingBookings: DateRangeBookingRow[],
+  options?: { isToday?: boolean; nowMinutesInDay?: number },
 ): StartTimeOption[] {
-  const windowStart = timeToMinutes(window.start_time);
-  const windowEnd = timeToMinutes(window.end_time);
   const durationMinutes = Math.round(durationHours * 60);
 
   if (durationMinutes <= 0) {
     throw new Error(`computeValidStartTimes: invalid durationHours "${durationHours}"`);
   }
 
-  // Only bookings that still occupy real studio time can block a candidate.
-  const pendingCutoff = Date.now() - PENDING_DEPOSIT_HOLD_MINUTES * 60_000;
-  const activeBookings = existingBookings.filter((booking) => {
-    if (booking.status === "cancelled" || booking.status === "auto_cancelled") return false;
-    if (booking.status === "pending_deposit") {
-      return new Date(booking.created_at).getTime() >= pendingCutoff;
+  const activeBookings = filterActiveBookings(existingBookings);
+  const nextDate = nextCalendarDay(date);
+  const previousDate = previousCalendarDay(date);
+
+  // Blocks: target date + next calendar date only — mirrors book_session's
+  // own blocked_time_ranges check (0037), which never looks at the previous
+  // day either.
+  const relevantBlocks = blocks.filter((block) => block.date === date || block.date === nextDate);
+
+  // Bookings: previous date + target date + next calendar date (3-day
+  // window) — mirrors book_session's own overlap check (0037), which
+  // queries `session_date between p_date - 1 and v_end_date`. A booking
+  // starting late on `previousDate` can still be occupying the early hours
+  // of `date`.
+  const relevantBookings = activeBookings.filter(
+    (booking) =>
+      booking.session_date === previousDate ||
+      booking.session_date === date ||
+      booking.session_date === nextDate,
+  );
+
+  const dayStart = 0;
+  const dayEnd = 23 * 60 + 30; // last grid-aligned start of the day, 23:30
+
+  const options_: StartTimeOption[] = [];
+
+  for (let candidateStart = dayStart; candidateStart <= dayEnd; candidateStart += 30) {
+    if (
+      options?.isToday &&
+      typeof options.nowMinutesInDay === "number" &&
+      candidateStart <= options.nowMinutesInDay
+    ) {
+      // Already in the past (or exactly now) for today in Lagos — never
+      // offer it, mirroring book_session's own start_in_past rejection.
+      continue;
     }
-    return true;
-  });
 
-  const options: StartTimeOption[] = [];
-
-  // Last valid grid-aligned start is the latest 30-minute mark that still
-  // leaves durationMinutes of room before windowEnd.
-  const lastValidStart = windowEnd - durationMinutes;
-
-  for (
-    let candidateStart = windowStart;
-    candidateStart <= lastValidStart;
-    candidateStart += 30
-  ) {
     const candidateEnd = candidateStart + durationMinutes;
 
     const paddedStart = candidateStart - SLOT_BUFFER_MINUTES;
     const paddedEnd = candidateEnd + SLOT_BUFFER_MINUTES;
 
-    const overlapsExisting = activeBookings.some((booking) => {
-      const bookingStart = timeToMinutes(booking.session_start_time);
-      const bookingEnd = timeToMinutes(booking.session_end_time);
+    const overlapsBlock = relevantBlocks.some((block) => {
+      const blockStart = toOffsetMinutes(date, block.date, block.start_time);
+      const blockEnd = toOffsetMinutes(date, block.date, block.end_time);
+      return paddedStart < blockEnd && paddedEnd > blockStart;
+    });
 
-      // Standard overlap predicate: two ranges intersect iff each one
-      // starts before the other ends. Padding our own candidate range (not
-      // the existing booking's) by the buffer on both sides is equivalent
-      // to requiring >= SLOT_BUFFER_MINUTES of true clearance from the
-      // existing booking on whichever side they're adjacent from.
+    if (overlapsBlock) {
+      continue;
+    }
+
+    const overlapsBooking = relevantBookings.some((booking) => {
+      if (
+        !booking.session_date ||
+        !booking.session_start_time ||
+        !booking.session_end_date ||
+        !booking.session_end_time
+      ) {
+        // Null session_* fields mean an is_addon booking (no studio room
+        // time reserved) — never blocks a candidate start time.
+        return false;
+      }
+
+      const bookingStart = toOffsetMinutes(date, booking.session_date, booking.session_start_time);
+      const bookingEnd = toOffsetMinutes(date, booking.session_end_date, booking.session_end_time);
+
       return paddedStart < bookingEnd && paddedEnd > bookingStart;
     });
 
-    if (!overlapsExisting) {
-      options.push({
-        startTime: minutesToTime(candidateStart),
-        endTime: minutesToTime(candidateEnd),
-      });
+    if (overlapsBooking) {
+      continue;
     }
+
+    const endOffset = candidateEnd;
+    const endDate = endOffset >= 24 * 60 ? nextDate : date;
+    const endTime = minutesToTime(endOffset % (24 * 60));
+
+    options_.push({
+      startTime: minutesToTime(candidateStart),
+      endTime,
+      endDate,
+    });
   }
 
-  return options;
+  return options_;
 }
 
 /**
  * Converts minutes-since-midnight back to "HH:MM:SS", matching the format
- * AvailabilitySlot.start_time/end_time already use (see
- * lib/repositories/availability-repository.ts) so callers can feed the
+ * BlockedTimeRange.start_time/end_time already use, so callers can feed the
  * result straight back into the repository/RPC layer without reformatting.
- * Inverse of timeToMinutes for whole-minute values (seconds always ":00"
- * since every candidate here is grid-aligned).
  */
 function minutesToTime(totalMinutes: number): string {
   const hours = Math.floor(totalMinutes / 60);
@@ -271,54 +378,35 @@ function minutesToTime(totalMinutes: number): string {
 
 export type GetValidStartTimesResult =
   | { success: true; options: StartTimeOption[] }
-  | { success: false; error: "window_not_found" | "invalid_service" | "unknown"; message: string };
+  | { success: false; error: "invalid_service" | "unknown"; message: string };
 
 /**
- * I/O wrapper around computeValidStartTimes: fetches the window
- * (getSlotById), its existing non-cancelled-filtered-later bookings
- * (getBookingsForSlot), and the service's duration (getServiceById) from the
- * repository layer, then delegates all business logic to the pure function
- * above. Kept separate from computeValidStartTimes so the grid/overlap
- * logic itself stays trivially unit-testable without mocking Supabase.
+ * I/O wrapper around computeValidStartTimes: fetches the service's duration
+ * (getServiceById), the blocks for `date` and the next calendar date
+ * (getBlocksForDate, called for both days — matching book_session's own
+ * blocked_time_ranges check, which never looks at the previous day), and
+ * bookings across the full previous-date..next-date 3-day window
+ * (getBookingsForDateRange, matching book_session's own `p_date - 1 ..
+ * v_end_date` overlap check, 0037) from the repository layer, then
+ * delegates all business logic to the pure function above. Kept separate
+ * from computeValidStartTimes so the block/overlap logic itself stays
+ * trivially unit-testable without mocking Supabase.
  */
-export async function getValidStartTimesForWindow(
-  slotId: string,
+export async function getValidStartTimesForDate(
+  date: string,
   serviceId: string,
   excludeBookingId?: string,
 ): Promise<GetValidStartTimesResult> {
   try {
-    const [service, allBookings, window] = await Promise.all([
+    const previousDate = previousCalendarDay(date);
+    const nextDate = nextCalendarDay(date);
+
+    const [service, blocksToday, blocksNextDay, bookings] = await Promise.all([
       getServiceById(serviceId),
-      getBookingsForSlot(slotId),
-      getSlotById(slotId),
+      getBlocksForDate(date),
+      getBlocksForDate(nextDate),
+      getBookingsForDateRange(previousDate, nextDate),
     ]);
-
-    // Admin reschedule (lib/repositories/admin-booking-repository.ts) may
-    // target the SAME window a booking is already carved from — without this
-    // exclusion, that booking's own current time range would count as an
-    // "existing booking" blocking candidates around itself. The customer
-    // booking flow never passes this (there is no booking to exclude yet),
-    // so it's a no-op filter there.
-    // getBookingsForSlot(slotId) only ever returns bookings that have this
-    // real window as their slot_id — by 0019_addon_bookings.sql's
-    // consistency check, slot_id is non-null iff every session_* field is
-    // too, so this filter is a type-narrow of an invariant that already
-    // holds, not a behavior change (an is_addon booking has no slot_id and
-    // could never be returned here in the first place).
-    const existingBookings = allBookings
-      .filter((b) => (excludeBookingId ? b.id !== excludeBookingId : true))
-      .filter(
-        (b): b is typeof b & { session_start_time: string; session_end_time: string } =>
-          b.session_start_time !== null && b.session_end_time !== null,
-      );
-
-    if (!window) {
-      return {
-        success: false,
-        error: "window_not_found",
-        message: "This availability window could not be found.",
-      };
-    }
 
     if (!service) {
       return {
@@ -328,10 +416,48 @@ export async function getValidStartTimesForWindow(
       };
     }
 
-    const options = computeValidStartTimes(window, service.duration_hours, existingBookings);
+    // Admin reschedule may target a date a booking is already scheduled
+    // on — without this exclusion, that booking's own current time range
+    // would count as an "existing booking" blocking candidates around
+    // itself. The customer booking flow never passes this (there is no
+    // booking to exclude yet), so it's a no-op filter there.
+    const existingBookings = excludeBookingId
+      ? bookings.filter((b) => b.id !== excludeBookingId)
+      : bookings;
+
+    const today = lagosToday();
+    const isToday = date === today;
+    const nowMinutesInDay = isToday ? lagosMinutesSinceMidnight() : undefined;
+
+    const options = computeValidStartTimes(
+      date,
+      service.duration_hours,
+      [...blocksToday, ...blocksNextDay],
+      existingBookings,
+      { isToday, nowMinutesInDay },
+    );
+
     return { success: true, options };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to compute available start times.";
     return { success: false, error: "unknown", message };
   }
+}
+
+/**
+ * Current minutes-since-midnight in Lagos wall-clock time, for excluding
+ * already-past candidate start times when the target date is today. Not
+ * exported — only needed internally by getValidStartTimesForDate; kept
+ * next to computeValidStartTimes' other pure time-math helpers above for
+ * locality even though this one (unlike those) does read the real clock.
+ */
+function lagosMinutesSinceMidnight(now: Date = new Date()): number {
+  const parts = now.toLocaleTimeString("en-GB", {
+    timeZone: "Africa/Lagos",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const [hoursStr, minutesStr] = parts.split(":");
+  return Number(hoursStr) * 60 + Number(minutesStr);
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,12 +9,14 @@ import { Check } from "lucide-react";
 import { useBookingFlow, type BookingStep } from "@/lib/hooks/use-booking-flow";
 import { useResetOnPageShow } from "@/lib/hooks/use-reset-on-pageshow";
 import type { Service } from "@/lib/repositories/service-repository";
-import type { AvailabilitySlot } from "@/lib/repositories/availability-repository";
+import type { EquipmentItem } from "@/lib/repositories/equipment-repository";
 import { buildPackageCatalog } from "@/lib/services/package-catalog";
 import { formatKobo } from "@/lib/utils/money";
 import { consentFormSchema, type ConsentFormValues } from "@/lib/validation/consent";
 import { recordTcAcceptance } from "@/lib/services/tc-service";
 import { initializePayment, type PaymentChoice } from "@/lib/services/payment-service";
+import { fetchEquipmentItems } from "@/lib/services/equipment-actions";
+import { lagosToday } from "@/lib/utils/lagos-time";
 import { Calendar } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -47,9 +49,21 @@ function parseIsoDate(iso: string): Date {
   return new Date(year, month - 1, day);
 }
 
+/** Start of today in Lagos, as a local `Date` at midnight — used by the date
+ * picker's `disabled` prop below. Every date is open by default now
+ * (0036/0037, no more admin-opened "window" allowlist), so "before today" is
+ * the one rule the picker must still enforce itself. Built from
+ * lagosToday() (not `new Date()`'s own local timezone) for the same reason
+ * every other "what day is it" check in this codebase goes through
+ * lib/utils/lagos-time.ts — the browser's local timezone would be wrong the
+ * moment a customer books from outside Lagos. */
+function startOfTodayLagos(): Date {
+  return parseIsoDate(lagosToday());
+}
+
 /**
- * Two-column shell used by every step past "service" (date, window,
- * startTime, summary) — the interactive step content on the left, a
+ * Two-column shell used by every step past "service" (date, startTime,
+ * equipment, summary) — the interactive step content on the left, a
  * running recap of what's been picked so far on the right, so the page
  * uses its full width instead of a single narrow left-aligned card with a
  * blank right half.
@@ -72,13 +86,11 @@ function StepLayout({
 function SelectionSidebar({
   service,
   date,
-  window,
   chosenTime,
   songCount,
 }: {
   service: Service;
   date?: string | null;
-  window?: AvailabilitySlot | null;
   chosenTime?: { start: string; end: string } | null;
   // Set only once an addon booking's song count is known (after
   // submitAddonSongs creates the booking) — swaps the per-song "Price" row
@@ -123,25 +135,120 @@ function SelectionSidebar({
             <span className="font-medium text-foreground">{date}</span>
           </div>
         )}
-        {chosenTime ? (
+        {chosenTime && (
           <div className="flex items-center justify-between gap-3">
             <span className="text-muted-foreground">Time</span>
             <span className="font-medium text-foreground">
               {formatTimeRange(chosenTime.start, chosenTime.end)}
             </span>
           </div>
-        ) : (
-          window && (
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Window</span>
-              <span className="font-medium text-foreground">
-                {formatTimeRange(window.start_time, window.end_time)}
-              </span>
-            </div>
-          )
         )}
       </div>
     </aside>
+  );
+}
+
+const PROVIDED_BY_LABELS: Record<EquipmentItem["provided_by"], string> = {
+  studio: "Provided by studio",
+  client: "Bring your own",
+};
+
+/**
+ * Read-only equipment inventory step (0035_equipment_items.sql) — purely
+ * informational, nothing here is written to the booking. Fetches
+ * equipment_items directly via the equipment-actions.ts Server Action
+ * (Component -> Hook -> Service, no repository/Supabase access in this
+ * component) and renders name/description/provided-by/available-count, then
+ * a plain "Continue" button that just advances the step — see
+ * useBookingFlow's continueFromEquipment.
+ */
+function EquipmentStep({ onContinue }: { onContinue: () => void }) {
+  const [items, setItems] = useState<EquipmentItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+
+    async function load() {
+      setLoading(true);
+      setError(null);
+      const result = await fetchEquipmentItems();
+      if (!active) return;
+      setLoading(false);
+
+      if (!result.success) {
+        setError(result.message);
+        return;
+      }
+
+      setItems(result.items);
+    }
+
+    load();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div>
+        <h2 className="font-heading text-xl font-medium text-foreground">
+          Studio equipment
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          What&apos;s available in the studio for your session.
+        </p>
+      </div>
+
+      {loading && (
+        <div className="flex flex-col gap-2">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-16 animate-pulse rounded-xl border border-border bg-muted" />
+          ))}
+        </div>
+      )}
+
+      {!loading && error && <p className="text-sm text-destructive">{error}</p>}
+
+      {!loading && !error && items.length === 0 && (
+        <p className="text-sm text-muted-foreground">No equipment listed yet.</p>
+      )}
+
+      {!loading && !error && items.length > 0 && (
+        <div className="flex flex-col gap-3">
+          {items.map((item) => (
+            <div
+              key={item.id}
+              className="flex items-start justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3.5"
+            >
+              <div className="flex flex-col gap-0.5">
+                <span className="font-medium text-foreground">{item.name}</span>
+                {item.description && (
+                  <span className="text-sm text-muted-foreground">{item.description}</span>
+                )}
+                <span className="text-xs text-muted-foreground">
+                  {PROVIDED_BY_LABELS[item.provided_by]}
+                </span>
+              </div>
+              <Badge variant="outline" className="shrink-0">
+                {item.quantity_available} available
+              </Badge>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Button
+        type="button"
+        onClick={onContinue}
+        className="w-fit rounded-none bg-[var(--amber-glow)] text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
+      >
+        Continue
+      </Button>
+    </div>
   );
 }
 
@@ -211,26 +318,21 @@ export function BookingFlow({ initialServiceId }: BookingFlowProps) {
         >
           <div>
             <h2 className="font-heading text-xl font-medium text-foreground">Choose a date</h2>
-            <p className="text-sm text-muted-foreground">Only open dates are selectable.</p>
+            <p className="text-sm text-muted-foreground">
+              Every date is open — pick one to see its available start times.
+            </p>
           </div>
 
-          {flow.datesLoading && (
-            <p className="text-sm text-muted-foreground">Loading availability…</p>
-          )}
-          {flow.datesError && <p className="text-sm text-destructive">{flow.datesError}</p>}
-
-          {!flow.datesLoading && !flow.datesError && (
-            <div className="flex justify-center rounded-2xl border border-border bg-card p-4 sm:p-6">
-              <Calendar
-                mode="single"
-                className="w-full [--cell-size:--spacing(11)] sm:[--cell-size:--spacing(12)]"
-                classNames={{ root: "w-full" }}
-                selected={flow.selectedDate ? parseIsoDate(flow.selectedDate) : undefined}
-                onSelect={(date) => date && flow.selectDate(toIsoDate(date))}
-                disabled={(date) => !flow.openDates.includes(toIsoDate(date))}
-              />
-            </div>
-          )}
+          <div className="flex justify-center rounded-2xl border border-border bg-card p-4 sm:p-6">
+            <Calendar
+              mode="single"
+              className="w-full [--cell-size:--spacing(11)] sm:[--cell-size:--spacing(12)]"
+              classNames={{ root: "w-full" }}
+              selected={flow.selectedDate ? parseIsoDate(flow.selectedDate) : undefined}
+              onSelect={(date) => date && flow.selectDate(toIsoDate(date))}
+              disabled={(date) => date < startOfTodayLagos()}
+            />
+          </div>
 
           <Button variant="outline" onClick={flow.backToService} className="w-fit">
             Back
@@ -238,71 +340,16 @@ export function BookingFlow({ initialServiceId }: BookingFlowProps) {
         </StepLayout>
       )}
 
-      {flow.step === "window" && flow.selectedService && flow.selectedDate && (
+      {flow.step === "startTime" && flow.selectedService && flow.selectedDate && (
         <StepLayout
           sidebar={<SelectionSidebar service={flow.selectedService} date={flow.selectedDate} />}
-        >
-          <div>
-            <h2 className="font-heading text-xl font-medium text-foreground">
-              Choose a time window
-            </h2>
-            <p className="text-sm text-muted-foreground">Open windows on {flow.selectedDate}.</p>
-          </div>
-
-          {flow.windowsLoading && (
-            <p className="text-sm text-muted-foreground">Loading windows…</p>
-          )}
-          {flow.windowsError && (
-            <p className="text-sm text-destructive">{flow.windowsError}</p>
-          )}
-
-          {!flow.windowsLoading && !flow.windowsError && flow.windows.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              No open windows left for this date — please pick another date.
-            </p>
-          )}
-
-          {!flow.windowsLoading && flow.windows.length > 1 && (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {flow.windows.map((window) => (
-                <button
-                  key={window.id}
-                  type="button"
-                  onClick={() => flow.selectWindow(window)}
-                  className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3.5 text-left transition-colors hover:border-[var(--amber-glow)]/50 hover:bg-secondary"
-                >
-                  <span className="font-medium">
-                    {formatTimeRange(window.start_time, window.end_time)}
-                  </span>
-                  <Badge>open</Badge>
-                </button>
-              ))}
-            </div>
-          )}
-
-          <Button variant="outline" onClick={flow.backToDate} className="w-fit">
-            Back
-          </Button>
-        </StepLayout>
-      )}
-
-      {flow.step === "startTime" && flow.selectedService && flow.selectedWindow && (
-        <StepLayout
-          sidebar={
-            <SelectionSidebar
-              service={flow.selectedService}
-              date={flow.selectedDate}
-              window={flow.selectedWindow}
-            />
-          }
         >
           <div>
             <h2 className="font-heading text-xl font-medium text-foreground">
               Choose a start time
             </h2>
             <p className="text-sm text-muted-foreground">
-              Within {formatTimeRange(flow.selectedWindow.start_time, flow.selectedWindow.end_time)}
-              , for a {flow.selectedService.duration_hours}-hour session.
+              On {flow.selectedDate}, for a {flow.selectedService.duration_hours}-hour session.
             </p>
           </div>
 
@@ -320,40 +367,69 @@ export function BookingFlow({ initialServiceId }: BookingFlowProps) {
             !flow.startTimesError &&
             flow.startTimeOptions.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                No available start times in this window for this service — try another
-                date or window.
+                No available start times — try another date.
               </p>
             )}
 
           {!flow.startTimesLoading && flow.startTimeOptions.length > 0 && (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {flow.startTimeOptions.map((option) => (
-                <button
-                  key={option.startTime}
-                  type="button"
-                  disabled={flow.bookingSubmitting}
-                  onClick={() => flow.selectStartTime(option)}
-                  className="flex flex-col items-center gap-0.5 rounded-xl border border-border bg-card px-3 py-3.5 text-center transition-colors hover:border-[var(--amber-glow)]/50 hover:bg-secondary disabled:pointer-events-none disabled:opacity-50"
-                >
-                  <span className="font-mono text-sm font-medium">
-                    {option.startTime.slice(0, 5)}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    – {option.endTime.slice(0, 5)}
-                  </span>
-                </button>
-              ))}
+              {flow.startTimeOptions.map((option) => {
+                // An overnight session (endDate after the selected date) —
+                // show the end date alongside the end time so it never
+                // reads as ending earlier the same day, same convention as
+                // lib/services/email-service.ts's formatSessionLine.
+                const spansMidnight = option.endDate !== flow.selectedDate;
+
+                return (
+                  <button
+                    key={option.startTime}
+                    type="button"
+                    disabled={flow.bookingSubmitting}
+                    onClick={() => flow.selectStartTime(option)}
+                    className="flex flex-col items-center gap-0.5 rounded-xl border border-border bg-card px-3 py-3.5 text-center transition-colors hover:border-[var(--amber-glow)]/50 hover:bg-secondary disabled:pointer-events-none disabled:opacity-50"
+                  >
+                    <span className="font-mono text-sm font-medium">
+                      {option.startTime.slice(0, 5)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      – {option.endTime.slice(0, 5)}
+                      {spansMidnight ? " (+1 day)" : ""}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
 
           <Button
             variant="outline"
-            onClick={flow.backToWindow}
+            onClick={flow.backToDate}
             disabled={flow.bookingSubmitting}
             className="w-fit"
           >
             Back
           </Button>
+        </StepLayout>
+      )}
+
+      {flow.step === "equipment" && flow.selectedService && (
+        <StepLayout
+          sidebar={
+            <SelectionSidebar
+              service={flow.selectedService}
+              date={flow.booking?.session_date}
+              chosenTime={
+                flow.booking?.session_start_time && flow.booking?.session_end_time
+                  ? {
+                      start: flow.booking.session_start_time,
+                      end: flow.booking.session_end_time,
+                    }
+                  : null
+              }
+            />
+          }
+        >
+          <EquipmentStep onContinue={flow.continueFromEquipment} />
         </StepLayout>
       )}
 
@@ -624,20 +700,21 @@ function BookingSummaryStep({
   );
 }
 
-const STEP_ORDER: { key: "service" | "date" | "window" | "startTime" | "summary"; label: string }[] = [
+const STEP_ORDER: {
+  key: "service" | "date" | "startTime" | "equipment" | "summary";
+  label: string;
+}[] = [
   { key: "service", label: "Package" },
   { key: "date", label: "Date" },
   { key: "startTime", label: "Time" },
+  { key: "equipment", label: "Equipment" },
   { key: "summary", label: "Confirm" },
 ];
 
-// "window" collapses into the "Time" step visually — it's often
-// auto-skipped (single-window dates), so it doesn't get its own dot. An
-// addon booking's "songs" step (contact + track details, replacing
-// date/window/startTime entirely) collapses into the "Date" dot — the
+// An addon booking's "songs" step (contact + track details, replacing
+// date/startTime/equipment entirely) collapses into the "Date" dot — the
 // closest equivalent "provide details" step in the visual progression.
 function stepIndex(step: BookingStep): number {
-  if (step === "window") return 2;
   if (step === "songs") return 1;
   return STEP_ORDER.findIndex((s) => s.key === step);
 }

@@ -99,11 +99,30 @@ async function sendEmail(params: {
   }
 }
 
-/** Common "date at time" line used across several templates below. */
-function formatSessionLine(sessionDate: string, sessionStartTime: string, sessionEndTime?: string): string {
-  return sessionEndTime
-    ? `${sessionDate}, ${sessionStartTime}–${sessionEndTime}`
-    : `${sessionDate}, ${sessionStartTime}`;
+/**
+ * Common "date at time" line used across several templates below. When
+ * `sessionEndDate` is provided and differs from `sessionDate` (an overnight
+ * session that crosses midnight — see bookings.session_end_date,
+ * 0036_blocked_time_ranges.sql), the end date is shown alongside the end
+ * time (e.g. "Oct 10, 11:00 PM – Oct 11, 2:00 AM") so the email is never
+ * misread as ending earlier the same day. Falls back to today's plain
+ * single-date format otherwise, unchanged from before this field existed.
+ */
+function formatSessionLine(
+  sessionDate: string,
+  sessionStartTime: string,
+  sessionEndTime?: string,
+  sessionEndDate?: string,
+): string {
+  if (!sessionEndTime) {
+    return `${sessionDate}, ${sessionStartTime}`;
+  }
+
+  if (sessionEndDate && sessionEndDate !== sessionDate) {
+    return `${sessionDate}, ${sessionStartTime} – ${sessionEndDate}, ${sessionEndTime}`;
+  }
+
+  return `${sessionDate}, ${sessionStartTime}–${sessionEndTime}`;
 }
 
 /**
@@ -120,6 +139,7 @@ export async function sendOwnerNewBookingEmail(params: {
   sessionDate: string;
   sessionStartTime: string;
   sessionEndTime: string;
+  sessionEndDate?: string;
   amountPaidKobo: number;
   totalPriceKobo: number;
   status: string;
@@ -132,6 +152,7 @@ export async function sendOwnerNewBookingEmail(params: {
     sessionDate,
     sessionStartTime,
     sessionEndTime,
+    sessionEndDate,
     amountPaidKobo,
     totalPriceKobo,
     status,
@@ -144,7 +165,7 @@ export async function sendOwnerNewBookingEmail(params: {
     paragraph(`<strong>${escapeHtml(customerName)}</strong> (${escapeHtml(customerEmail)}) has paid for a session.`) +
     detailTable([
       { label: "Service", value: serviceLabel },
-      { label: "Session", value: formatSessionLine(sessionDate, sessionStartTime, sessionEndTime) },
+      { label: "Session", value: formatSessionLine(sessionDate, sessionStartTime, sessionEndTime, sessionEndDate) },
       { label: "Amount paid", value: `${formatKobo(amountPaidKobo)} of ${formatKobo(totalPriceKobo)}` },
       { label: "Status", value: status },
     ]);
@@ -171,6 +192,7 @@ export async function sendCustomerBookingConfirmedEmail(params: {
   sessionDate: string;
   sessionStartTime: string;
   sessionEndTime: string;
+  sessionEndDate?: string;
   amountPaidKobo: number;
   totalPriceKobo: number;
   status: "deposited" | "paid_in_full";
@@ -183,6 +205,7 @@ export async function sendCustomerBookingConfirmedEmail(params: {
     sessionDate,
     sessionStartTime,
     sessionEndTime,
+    sessionEndDate,
     amountPaidKobo,
     totalPriceKobo,
     status,
@@ -205,7 +228,7 @@ export async function sendCustomerBookingConfirmedEmail(params: {
     ) +
     detailTable([
       { label: "Service", value: serviceLabel },
-      { label: "Session", value: formatSessionLine(sessionDate, sessionStartTime, sessionEndTime) },
+      { label: "Session", value: formatSessionLine(sessionDate, sessionStartTime, sessionEndTime, sessionEndDate) },
       { label: "Amount paid", value: formatKobo(amountPaidKobo) },
       ...(isFull ? [] : [{ label: "Balance remaining", value: formatKobo(remainingKobo) }]),
     ]) +
@@ -240,11 +263,21 @@ export async function sendCustomerBalancePaidEmail(params: {
   sessionDate: string;
   sessionStartTime: string;
   sessionEndTime: string;
+  sessionEndDate?: string;
   totalPriceKobo: number;
   siteUrl: string;
 }): Promise<SendEmailResult> {
-  const { customerEmail, customerName, serviceLabel, sessionDate, sessionStartTime, sessionEndTime, totalPriceKobo, siteUrl } =
-    params;
+  const {
+    customerEmail,
+    customerName,
+    serviceLabel,
+    sessionDate,
+    sessionStartTime,
+    sessionEndTime,
+    sessionEndDate,
+    totalPriceKobo,
+    siteUrl,
+  } = params;
 
   const dashboardUrl = `${siteUrl}/dashboard`;
   const brand = GENIE_PRO_BRAND;
@@ -257,7 +290,7 @@ export async function sendCustomerBalancePaidEmail(params: {
     ) +
     detailTable([
       { label: "Service", value: serviceLabel },
-      { label: "Session", value: formatSessionLine(sessionDate, sessionStartTime, sessionEndTime) },
+      { label: "Session", value: formatSessionLine(sessionDate, sessionStartTime, sessionEndTime, sessionEndDate) },
       { label: "Total paid", value: formatKobo(totalPriceKobo) },
     ]) +
     paragraph("No further payment is needed — we'll see you at your session.") +

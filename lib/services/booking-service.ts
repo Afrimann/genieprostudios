@@ -8,20 +8,22 @@ export type BookingStatus =
   | "auto_cancelled"
   | "cancelled";
 
-// slot_id/session_date/session_start_time/session_end_time are only null
-// together, for an is_addon booking created via createAddonBooking() below
-// — a per-song service (e.g. mixing/mastering) has no studio room time to
-// reserve at all (see 0019_addon_bookings.sql's
-// bookings_session_fields_consistent check constraint, the DB-level source
-// of truth for this invariant). Never null for a real session booking
-// (createPendingBooking).
+// session_date/session_start_time/session_end_date/session_end_time are
+// only null together, for an is_addon booking created via
+// createAddonBooking() below — a per-song service (e.g. mixing/mastering)
+// has no studio room time to reserve at all (see
+// 0036_blocked_time_ranges.sql's updated bookings_session_fields_consistent
+// check constraint, the DB-level source of truth for this invariant).
+// Never null for a real session booking (createPendingBooking). slot_id no
+// longer exists on this table (dropped in 0036 alongside availability_slots
+// — every date is open by default now, see book_session/0037).
 export type Booking = {
   id: string;
   customer_id: string;
   service_id: string;
-  slot_id: string | null;
   session_date: string | null;
   session_start_time: string | null;
+  session_end_date: string | null;
   session_end_time: string | null;
   // Order contact info, collected once per order — only ever set on an
   // is_addon booking (createAddonBooking below). Null for a room booking,
@@ -40,51 +42,54 @@ export type Booking = {
 // Discriminated union so the frontend can branch on `.error` without ever
 // parsing Postgres error strings itself.
 //
-// 0014 note: book_slot_and_create_booking now takes a customer-chosen
-// p_start_time and validates it against the window's bounds, the 30-minute
-// grid, and overlap with existing bookings on that window (see
-// supabase/migrations/0014_booking_windows.sql) — the three new error
-// variants below (outside_window/invalid_start_time/time_unavailable)
-// correspond 1:1 to that RPC's new raise exception codes.
+// 0037 note: book_session takes a customer-chosen p_date/p_start_time and
+// validates grid alignment, that the start isn't in the past, overlap
+// against admin-marked blocked_time_ranges, and overlap with existing
+// bookings — including across a midnight boundary, since a session may now
+// legitimately span two calendar days (see
+// supabase/migrations/0037_book_session.sql). The error variants below
+// correspond 1:1 to that RPC's raise exception codes.
 export type CreatePendingBookingResult =
   | { success: true; booking: Booking }
-  | { success: false; error: "slot_taken"; message: string }
   | { success: false; error: "invalid_service"; message: string }
   | { success: false; error: "auth_required"; message: string }
-  | { success: false; error: "outside_window"; message: string }
+  | { success: false; error: "start_in_past"; message: string }
   | { success: false; error: "invalid_start_time"; message: string }
+  | { success: false; error: "time_blocked"; message: string }
   | { success: false; error: "time_unavailable"; message: string }
+  | { success: false; error: "is_addon_service"; message: string }
   | { success: false; error: "not_an_addon"; message: string }
   | { success: false; error: "invalid_song_count"; message: string }
   | { success: false; error: "invalid_contact"; message: string }
   | { success: false; error: "unknown"; message: string };
 
 /**
- * Creates a pending booking by calling the book_slot_and_create_booking
- * Postgres RPC (supabase/migrations/0014_booking_windows.sql), which locks
- * the window row (FOR UPDATE) and inserts the bookings row for the
- * customer-chosen startTime in a single transaction, after validating that
- * startTime against the window's bounds, the 30-minute grid, and overlap
- * with any existing non-cancelled booking already carved from that same
- * window. This is the ONLY supported way to create a booking that reserves
- * real studio time — never insert into bookings/availability_slots directly
- * from application code, since that would reintroduce the double-booking
- * race the RPC exists to prevent. For an is_addon service with no room time
- * to reserve (e.g. per-song mixing/mastering), use createAddonBooking
- * below instead.
+ * Creates a pending booking by calling the book_session Postgres RPC
+ * (supabase/migrations/0037_book_session.sql), which inserts the bookings
+ * row for the customer-chosen date + startTime in a single transaction,
+ * after validating grid alignment, that the start isn't already in the
+ * past, overlap against admin-marked blocked_time_ranges, and overlap with
+ * any existing non-cancelled booking — all serialized via an advisory
+ * transaction lock keyed on the target date(s) so concurrent requests for
+ * overlapping times can never both succeed. This is the ONLY supported way
+ * to create a booking that reserves real studio time — never insert into
+ * bookings directly from application code, since that would reintroduce
+ * the double-booking race the RPC exists to prevent. For an is_addon
+ * service with no room time to reserve (e.g. per-song mixing/mastering),
+ * use createAddonBooking below instead.
  *
  * `startTime` must be "HH:MM" or "HH:MM:SS" (matching the format used
- * elsewhere for AvailabilitySlot.start_time/end_time — see
+ * elsewhere for BlockedTimeRange.start_time/end_time — see
  * lib/repositories/availability-repository.ts and
  * lib/services/availability-service.ts's computeValidStartTimes, which is
  * the advisory, UI-supporting source of the options a caller should be
- * choosing from). This function does not itself validate startTime's
+ * choosing from). This function does not itself validate date/startTime's
  * format/alignment/bounds — that validation is the RPC's job server-side,
  * per this codebase's money/security discipline: never trust client input,
  * always let the database (via auth.uid() and its own checks) be the source
- * of truth. Passing an invalid startTime here is expected to surface as one
- * of the outside_window/invalid_start_time/time_unavailable failures below,
- * not as a client-side-caught error.
+ * of truth. Passing an invalid date/startTime here is expected to surface
+ * as one of the start_in_past/invalid_start_time/time_blocked/
+ * time_unavailable failures below, not as a client-side-caught error.
  *
  * The RPC alone determines the deposit amount (ceil(price_kobo * 0.7),
  * server-side) — this function must never compute or pass a deposit amount
@@ -92,18 +97,21 @@ export type CreatePendingBookingResult =
  * display-only client estimate, which is not sent here.
  *
  * customer_id is derived server-side from the caller's auth.uid() inside
- * the RPC; slotId/serviceId/startTime are the only inputs.
+ * the RPC; date/serviceId/startTime are the only inputs. A session may now
+ * span midnight — the RPC itself computes session_end_date/
+ * session_end_time via plain timestamp arithmetic, this function never
+ * computes or passes an end date/time.
  */
 export async function createPendingBooking(
-  slotId: string,
+  date: string,
   serviceId: string,
   startTime: string,
 ): Promise<CreatePendingBookingResult> {
   const supabase = await createClient();
 
-  const { data, error } = await supabase.rpc("book_slot_and_create_booking", {
-    p_slot_id: slotId,
+  const { data, error } = await supabase.rpc("book_session", {
     p_service_id: serviceId,
+    p_date: date,
     p_start_time: startTime,
   });
 
@@ -182,14 +190,6 @@ function translateBookSlotError(error: {
 }): CreatePendingBookingResult {
   const text = `${error.message ?? ""} ${error.details ?? ""}`.toLowerCase();
 
-  if (text.includes("slot_unavailable")) {
-    return {
-      success: false,
-      error: "slot_taken",
-      message: "This slot was just taken, please pick another.",
-    };
-  }
-
   if (text.includes("invalid_service")) {
     return {
       success: false,
@@ -206,11 +206,11 @@ function translateBookSlotError(error: {
     };
   }
 
-  if (text.includes("outside_window")) {
+  if (text.includes("start_in_past")) {
     return {
       success: false,
-      error: "outside_window",
-      message: "That start time doesn't leave enough room in this availability window. Please pick another time.",
+      error: "start_in_past",
+      message: "That start time has already passed. Please pick another time.",
     };
   }
 
@@ -222,11 +222,27 @@ function translateBookSlotError(error: {
     };
   }
 
+  if (text.includes("time_blocked")) {
+    return {
+      success: false,
+      error: "time_blocked",
+      message: "That time isn't available (blocked by the studio). Please pick another time.",
+    };
+  }
+
   if (text.includes("time_unavailable")) {
     return {
       success: false,
       error: "time_unavailable",
       message: "That time was just booked (or is too close to another booking), please pick another.",
+    };
+  }
+
+  if (text.includes("is_addon_service")) {
+    return {
+      success: false,
+      error: "is_addon_service",
+      message: "This service has no studio time to reserve. Please use the add-on flow instead.",
     };
   }
 

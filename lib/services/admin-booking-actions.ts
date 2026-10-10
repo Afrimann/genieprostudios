@@ -12,12 +12,7 @@ import {
 } from "@/lib/repositories/admin-booking-repository";
 import { getTrackDownloadUrl } from "@/lib/repositories/booking-tracks-repository";
 import {
-  getOpenDatesInRange,
-  getOpenSlotsForDate,
-  type AvailabilitySlot,
-} from "@/lib/repositories/availability-repository";
-import {
-  getValidStartTimesForWindow,
+  getValidStartTimesForDate,
   type GetValidStartTimesResult,
 } from "@/lib/services/availability-service";
 import {
@@ -63,57 +58,30 @@ export async function markBookingStaleAction(bookingId: string): Promise<MarkBoo
   }
 }
 
-export type FetchOpenDatesResult =
-  | { success: true; dates: string[] }
-  | { success: false; message: string };
-
-/** Reused date-range read (same underlying repository call the customer booking flow uses — availability_slots.status='open' is publicly readable, no admin-specific filtering needed). */
-export async function fetchOpenDatesForReschedule(
-  startDate: string,
-  endDate: string,
-): Promise<FetchOpenDatesResult> {
-  try {
-    const dates = await getOpenDatesInRange(startDate, endDate);
-    return { success: true, dates };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to load open dates.";
-    return { success: false, message };
-  }
-}
-
-export type FetchWindowsResult =
-  | { success: true; windows: AvailabilitySlot[] }
-  | { success: false; message: string };
-
-export async function fetchWindowsForRescheduleDate(date: string): Promise<FetchWindowsResult> {
-  try {
-    const windows = await getOpenSlotsForDate(date);
-    return { success: true, windows };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to load open windows.";
-    return { success: false, message };
-  }
-}
-
 /**
  * excludeBookingId is always the booking currently being rescheduled, so its
  * own current time range never blocks itself if the admin picks the same
- * window it's already on. See getValidStartTimesForWindow's third param.
+ * date it's already on. See getValidStartTimesForDate's third param.
+ *
+ * Every date is open by default now (0036/0037) — there is no "open dates"
+ * allowlist to fetch anymore. The admin reschedule calendar instead only
+ * needs to keep disabling past dates (a plain `date < today` check in the
+ * UI), same as the customer booking flow.
  */
 export async function fetchValidStartTimesForReschedule(
-  slotId: string,
+  date: string,
   serviceId: string,
   excludeBookingId: string,
 ): Promise<GetValidStartTimesResult> {
-  return getValidStartTimesForWindow(slotId, serviceId, excludeBookingId);
+  return getValidStartTimesForDate(date, serviceId, excludeBookingId);
 }
 
 export async function rescheduleBookingAction(
   bookingId: string,
-  slotId: string,
+  date: string,
   startTime: string,
 ): Promise<RescheduleBookingResult> {
-  return rescheduleBooking(bookingId, slotId, startTime);
+  return rescheduleBooking(bookingId, date, startTime);
 }
 
 export type GetTrackDownloadUrlResult =

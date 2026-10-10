@@ -27,6 +27,25 @@ function formatTimeRange(start: string, end: string): string {
   return `${start.slice(0, 5)} – ${end.slice(0, 5)}`;
 }
 
+/**
+ * "Oct 10 · 11:00 PM – Oct 11, 2:00 AM" when sessionEndDate differs from
+ * sessionDate (an overnight session — see bookings.session_end_date,
+ * 0036_blocked_time_ranges.sql), else the plain single-date format —
+ * mirrors lib/services/email-service.ts's formatSessionLine convention.
+ */
+function formatSessionLine(
+  sessionDate: string,
+  start: string,
+  end: string,
+  sessionEndDate: string | null,
+): string {
+  if (sessionEndDate && sessionEndDate !== sessionDate) {
+    return `${sessionDate} · ${start.slice(0, 5)} – ${sessionEndDate}, ${end.slice(0, 5)}`;
+  }
+
+  return `${sessionDate} · ${formatTimeRange(start, end)}`;
+}
+
 const STATUS_LABELS: Record<BookingStatus, string> = {
   pending_deposit: "Awaiting deposit",
   deposited: "Deposit paid",
@@ -87,7 +106,12 @@ async function DashboardBookings() {
                   </p>
                   <p className="text-sm text-muted-foreground">
                     {booking.session_date && booking.session_start_time && booking.session_end_time
-                      ? `${booking.session_date} · ${formatTimeRange(booking.session_start_time, booking.session_end_time)}`
+                      ? formatSessionLine(
+                          booking.session_date,
+                          booking.session_start_time,
+                          booking.session_end_time,
+                          booking.session_end_date,
+                        )
                       : "Per-song add-on — no studio time"}
                   </p>
                 </div>

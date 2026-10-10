@@ -8,103 +8,119 @@
 // return a typed result the UI can branch on directly.
 
 import {
-  getSlotsForDate,
-  getSlotsForDateWithBookings,
-  closeSlot as closeSlotRepo,
-  type AvailabilitySlot,
-  type SlotWithBookings,
+  getBlocksForDate,
+  getBlocksAndBookingsForDate,
+  deleteBlock as deleteBlockRepo,
+  type BlockedTimeRange,
+  type DateWithBlocksAndBookings,
 } from "@/lib/repositories/availability-repository";
 import {
-  createSlotWithBufferCheck,
-  type CreateSlotWithBufferCheckResult,
+  createBlockWithOverlapCheck,
+  getValidStartTimesForDate,
+  type CreateBlockWithOverlapCheckResult,
+  type GetValidStartTimesResult,
 } from "@/lib/services/availability-service";
-import { createSlotSchema } from "@/lib/validation/availability";
+import { createBlockSchema } from "@/lib/validation/availability";
 
-export type GetSlotsForDateResult =
-  | { success: true; slots: AvailabilitySlot[] }
+export type GetBlocksForDateResult =
+  | { success: true; blocks: BlockedTimeRange[] }
   | { success: false; message: string };
 
-/** Admin-only: all slots (any status) for a given date. */
-export async function fetchSlotsForDate(date: string): Promise<GetSlotsForDateResult> {
+/** Admin-only: every block for a given date. */
+export async function fetchBlocksForDate(date: string): Promise<GetBlocksForDateResult> {
   try {
-    const slots = await getSlotsForDate(date);
-    return { success: true, slots };
+    const blocks = await getBlocksForDate(date);
+    return { success: true, blocks };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to load slots.";
+    const message = err instanceof Error ? err.message : "Failed to load blocks.";
     return { success: false, message };
   }
 }
 
 /**
- * Validates + creates a new slot with the mandatory buffer check. Never
- * calls createSlot()/the repository directly — createSlotWithBufferCheck is
- * the only sanctioned path per lib/services/availability-service.ts.
+ * Validates + creates a new block, warning (via the "overlap_violation"
+ * error) if it would collide with an existing, still-live booking. Never
+ * calls createBlock()/the repository directly — createBlockWithOverlapCheck
+ * is the only sanctioned path per lib/services/availability-service.ts.
  */
-export async function addSlot(input: {
+export async function addBlock(input: {
   date: string;
   startTime: string;
   endTime: string;
-}): Promise<CreateSlotWithBufferCheckResult> {
-  const parsed = createSlotSchema.safeParse(input);
+  reason?: string;
+}): Promise<CreateBlockWithOverlapCheckResult> {
+  const parsed = createBlockSchema.safeParse(input);
 
   if (!parsed.success) {
     return {
       success: false,
       error: "unknown",
-      message: parsed.error.issues[0]?.message ?? "Invalid slot details",
+      message: parsed.error.issues[0]?.message ?? "Invalid block details",
     };
   }
 
-  return createSlotWithBufferCheck({
+  return createBlockWithOverlapCheck({
     date: parsed.data.date,
     startTime: parsed.data.startTime,
     endTime: parsed.data.endTime,
+    reason: parsed.data.reason ?? null,
   });
 }
 
-export type CloseSlotResult =
-  | { success: true; slot: AvailabilitySlot }
+export type DeleteBlockResult =
+  | { success: true }
   | { success: false; message: string };
 
-/** Admin-only: closes an open slot. No-ops (returns failure) if it wasn't open. */
-export async function closeSlotAction(slotId: string): Promise<CloseSlotResult> {
+/** Admin-only: removes a block, immediately re-opening that time range. No-ops (returns failure) if it was already removed. */
+export async function deleteBlockAction(blockId: string): Promise<DeleteBlockResult> {
   try {
-    const slot = await closeSlotRepo(slotId);
+    const removed = await deleteBlockRepo(blockId);
 
-    if (!slot) {
+    if (!removed) {
       return {
         success: false,
-        message: "This slot could not be closed (it may already be booked or closed).",
+        message: "This block could not be removed (it may already be gone).",
       };
     }
 
-    return { success: true, slot };
+    return { success: true };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to close slot.";
+    const message = err instanceof Error ? err.message : "Failed to remove this block.";
     return { success: false, message };
   }
 }
 
-export type GetSlotsForDateWithBookingsResult =
-  | { success: true; slots: SlotWithBookings[] }
+export type GetBlocksAndBookingsForDateResult =
+  | { success: true; data: DateWithBlocksAndBookings }
   | { success: false; message: string };
 
 /**
- * Admin-only: all windows (any status) for a given date, each with its own
- * bookings nested underneath (ordered by session_start_time). Backs the
- * admin availability UI's "window -> its bookings" display (0014: a window
- * can now back multiple non-overlapping bookings, so the flat
- * fetchSlotsForDate view above no longer shows which times within a window
- * are already taken).
+ * Admin-only: a date's blocks plus every booking overlapping that date.
+ * Backs the admin availability UI's "blocks for this date" + "bookings
+ * overlapping this date" display, replacing the old
+ * fetchSlotsForDateWithBookings' nested window -> bookings shape.
  */
-export async function fetchSlotsForDateWithBookings(
+export async function fetchBlocksAndBookingsForDate(
   date: string,
-): Promise<GetSlotsForDateWithBookingsResult> {
+): Promise<GetBlocksAndBookingsForDateResult> {
   try {
-    const slots = await getSlotsForDateWithBookings(date);
-    return { success: true, slots };
+    const data = await getBlocksAndBookingsForDate(date);
+    return { success: true, data };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to load slots.";
+    const message = err instanceof Error ? err.message : "Failed to load this date's availability.";
     return { success: false, message };
   }
+}
+
+/** Thin passthrough — getValidStartTimesForDate is already a
+ * discriminated-union result, no extra shaping needed. Advisory only (see
+ * lib/services/availability-service.ts) — the RPC called to actually book
+ * independently re-validates bounds/grid/overlap server-side, so this is
+ * purely what populates the UI's start-time buttons. */
+export async function fetchValidStartTimesForDate(
+  date: string,
+  serviceId: string,
+  excludeBookingId?: string,
+): Promise<GetValidStartTimesResult> {
+  return getValidStartTimesForDate(date, serviceId, excludeBookingId);
 }

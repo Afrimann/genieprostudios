@@ -24,6 +24,7 @@ export type SweepBooking = {
   serviceId: string;
   sessionDate: string;
   sessionStartTime: string;
+  sessionEndDate: string;
   sessionEndTime: string;
   totalPriceKobo: number;
   depositAmountKobo: number;
@@ -35,14 +36,17 @@ export type SweepBooking = {
 };
 
 // Matches the column set every bookings_needing_*/stale_pending_bookings RPC
-// returns (0016_session_start_at_helper.sql) — all four share this exact
-// shape by design, so one hydration helper below works for all of them.
+// returns (0016_session_start_at_helper.sql, extended with session_end_date
+// by 0038_sweep_functions_session_end_date.sql) — all three share this
+// exact shape by design, so one hydration helper below works for all of
+// them.
 type RpcBookingRow = {
   id: string;
   customer_id: string;
   service_id: string;
   session_date: string;
   session_start_time: string;
+  session_end_date: string;
   session_end_time: string;
   total_price_kobo: number;
   deposit_amount_kobo: number;
@@ -97,6 +101,7 @@ async function hydrate(
       serviceId: row.service_id,
       sessionDate: row.session_date,
       sessionStartTime: row.session_start_time,
+      sessionEndDate: row.session_end_date,
       sessionEndTime: row.session_end_time,
       totalPriceKobo: row.total_price_kobo,
       depositAmountKobo: row.deposit_amount_kobo,

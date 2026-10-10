@@ -9,9 +9,11 @@ import {
   Clapperboard,
   MessageCircle,
   Users,
+  UserRound,
   Activity,
   LogOut,
   Radio,
+  Mic2,
 } from "lucide-react";
 
 import { signOut } from "@/lib/services/auth-service";
@@ -20,7 +22,9 @@ import { Badge } from "@/components/ui/badge";
 const NAV_ITEMS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/availability", label: "Availability", icon: CalendarClock },
+  { href: "/admin/equipment", label: "Equipment", icon: Mic2 },
   { href: "/admin/bookings", label: "Bookings", icon: AlertTriangle },
+  { href: "/admin/customers", label: "Customers", icon: UserRound },
   { href: "/admin/support", label: "Support", icon: MessageCircle },
   { href: "/admin/portfolio", label: "Portfolio", icon: Clapperboard },
   { href: "/admin/activity", label: "Activity", icon: Activity },

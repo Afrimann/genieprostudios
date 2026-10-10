@@ -36,6 +36,25 @@ function formatTimeRange(start: string, end: string): string {
 }
 
 /**
+ * "Oct 10 at 11:00 PM – Oct 11, 2:00 AM" when sessionEndDate differs from
+ * sessionDate (an overnight session — see bookings.session_end_date,
+ * 0036_blocked_time_ranges.sql), else the plain single-date format —
+ * mirrors lib/services/email-service.ts's formatSessionLine convention.
+ */
+function formatSessionLine(
+  sessionDate: string,
+  start: string,
+  end: string,
+  sessionEndDate: string | null,
+): string {
+  if (sessionEndDate && sessionEndDate !== sessionDate) {
+    return `${sessionDate} at ${start.slice(0, 5)} – ${sessionEndDate} at ${end.slice(0, 5)}`;
+  }
+
+  return `${sessionDate} at ${formatTimeRange(start, end)}`;
+}
+
+/**
  * Every booking, "order admin" style — full metadata is one click away on
  * /admin/bookings/[id] (getBookingDetailForAdmin), so this list itself stays
  * scannable: customer, service, session, status, paid/total, nothing more.
@@ -61,7 +80,7 @@ async function AllBookingsTable() {
             </span>
             <span className="truncate text-xs text-muted-foreground">
               {booking.sessionDate && booking.sessionStartTime && booking.sessionEndTime
-                ? `${booking.serviceLabel} — ${booking.sessionDate} at ${formatTimeRange(booking.sessionStartTime, booking.sessionEndTime)}`
+                ? `${booking.serviceLabel} — ${formatSessionLine(booking.sessionDate, booking.sessionStartTime, booking.sessionEndTime, booking.sessionEndDate)}`
                 : `${booking.serviceLabel} — per-song add-on, no studio time`}
             </span>
           </div>

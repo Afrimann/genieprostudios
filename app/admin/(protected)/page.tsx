@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 const DASHBOARD_REALTIME_TABLES = [
   { table: "bookings" },
   { table: "payments" },
-  { table: "availability_slots" },
+  { table: "blocked_time_ranges" },
   { table: "portfolio_entries" },
   // So "Ongoing" flips live the moment front desk clocks someone in/out,
   // rather than only on the next poll — see OngoingIndicator above.
@@ -120,9 +120,9 @@ async function DashboardStats() {
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <StatTile
         pattern={METER_PATTERNS[0]}
-        value={stats.openWindowsCount}
-        label="Open windows"
-        sublabel="Upcoming, unbooked capacity"
+        value={stats.upcomingBlocksCount}
+        label="Upcoming blocks"
+        sublabel="Admin-marked closures still ahead"
       />
       <StatTile
         pattern={METER_PATTERNS[1]}
@@ -315,8 +315,8 @@ async function RecentPaymentsSection() {
 const QUICK_LINKS = [
   {
     href: "/admin/availability",
-    label: "Open a window",
-    description: "Add availability for customers to book into.",
+    label: "Block a time range",
+    description: "Close specific hours to new bookings.",
     icon: CalendarClock,
   },
   {

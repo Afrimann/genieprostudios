@@ -8,14 +8,17 @@ import { getTracksForBooking } from "@/lib/repositories/booking-tracks-repositor
 // Hook -> Service -> Repository layering (this repository is dumb data
 // access only — no business rules, no status derivation, that lives in
 // services/the webhook handler).
-// session_date/session_start_time/session_end_time are null for an
-// is_addon booking (per-song mixing/mastering) — no studio room time was
-// reserved. See supabase/migrations/0019_addon_bookings.sql.
+// session_date/session_start_time/session_end_date/session_end_time are
+// null for an is_addon booking (per-song mixing/mastering) — no studio
+// room time was reserved. See
+// supabase/migrations/0036_blocked_time_ranges.sql's updated consistency
+// check.
 export type CustomerBooking = {
   id: string;
   serviceName: string;
   session_date: string | null;
   session_start_time: string | null;
+  session_end_date: string | null;
   session_end_time: string | null;
   total_price_kobo: number;
   deposit_amount_kobo: number;
@@ -70,6 +73,7 @@ export async function getBookingsForCurrentCustomer(): Promise<CustomerBooking[]
         id,
         session_date,
         session_start_time,
+        session_end_date,
         session_end_time,
         total_price_kobo,
         deposit_amount_kobo,
@@ -90,6 +94,7 @@ export async function getBookingsForCurrentCustomer(): Promise<CustomerBooking[]
     id: string;
     session_date: string | null;
     session_start_time: string | null;
+    session_end_date: string | null;
     session_end_time: string | null;
     total_price_kobo: number;
     deposit_amount_kobo: number;
@@ -110,6 +115,7 @@ export async function getBookingsForCurrentCustomer(): Promise<CustomerBooking[]
       serviceName: service?.label ?? "Unknown service",
       session_date: row.session_date,
       session_start_time: row.session_start_time,
+      session_end_date: row.session_end_date,
       session_end_time: row.session_end_time,
       total_price_kobo: row.total_price_kobo,
       deposit_amount_kobo: row.deposit_amount_kobo,
@@ -122,21 +128,20 @@ export async function getBookingsForCurrentCustomer(): Promise<CustomerBooking[]
 // ---------------------------------------------------------------------------
 // Single-booking detail, scoped to the current customer — the "your
 // bookings" list card's click-through target. Mirrors the shape of
-// admin-booking-repository.ts's getBookingDetailForAdmin(), minus the
-// admin-only fields (no availability_slots window, since a customer has no
-// use for the internal window record) and minus internal Paystack
-// references, but keeps the customer's own payment history — reasonable for
-// them to see what they've actually paid and when.
+// admin-booking-repository.ts's getBookingDetailForAdmin(), minus internal
+// Paystack references, but keeps the customer's own payment history —
+// reasonable for them to see what they've actually paid and when.
 // ---------------------------------------------------------------------------
 
-// sessionDate/sessionStartTime/sessionEndTime are null for an is_addon
-// booking — see CustomerBooking above.
+// sessionDate/sessionStartTime/sessionEndDate/sessionEndTime are null for
+// an is_addon booking — see CustomerBooking above.
 export type CustomerBookingDetail = {
   id: string;
   status: BookingStatus;
   createdAt: string;
   sessionDate: string | null;
   sessionStartTime: string | null;
+  sessionEndDate: string | null;
   sessionEndTime: string | null;
   totalPriceKobo: number;
   depositAmountKobo: number;
@@ -175,6 +180,7 @@ export async function getBookingDetailForCustomer(
         created_at,
         session_date,
         session_start_time,
+        session_end_date,
         session_end_time,
         total_price_kobo,
         deposit_amount_kobo,
@@ -216,6 +222,7 @@ export async function getBookingDetailForCustomer(
     createdAt: booking.created_at,
     sessionDate: booking.session_date,
     sessionStartTime: booking.session_start_time,
+    sessionEndDate: booking.session_end_date,
     sessionEndTime: booking.session_end_time,
     totalPriceKobo: booking.total_price_kobo,
     depositAmountKobo: booking.deposit_amount_kobo,
