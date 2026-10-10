@@ -1,10 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import {
-  lagosDateOffset,
-  lagosInstantIso,
-  lagosToday,
-  nextCalendarDay,
-} from "@/lib/utils/lagos-time";
+import { lagosDateOffset, lagosInstantIso, lagosToday } from "@/lib/utils/lagos-time";
 
 // Front desk data access — dumb reads only, same convention as
 // admin-booking-repository.ts. Authorization is RLS
@@ -24,7 +19,12 @@ export type FrontdeskSession = {
   sessionDate: string;
   sessionStartTime: string;
   sessionEndTime: string;
-  /** Real instants derived from the naive Lagos columns — see lib/utils/lagos-time.ts. */
+  /**
+   * Real instants derived from the naive Lagos columns — see
+   * lib/utils/lagos-time.ts. endAtIso uses session_end_date (0036) directly
+   * rather than guessing a midnight wrap from the raw times, since a
+   * session may now legitimately span two calendar days.
+   */
   startAtIso: string;
   endAtIso: string;
   /** Still owed right now, in kobo. 0 when paid in full. */
@@ -46,6 +46,7 @@ type BookingRow = {
   service_id: string;
   session_date: string;
   session_start_time: string;
+  session_end_date: string;
   session_end_time: string;
   total_price_kobo: number | string;
   amount_paid_kobo: number | string;
@@ -59,25 +60,6 @@ type AttendanceRow = {
   clock_in_balance_kobo: number | string | null;
   note: string | null;
 };
-
-/**
- * A session's real end instant. Both time columns hang off the single
- * session_date, and 0003_availability_slots.sql puts no CHECK constraint
- * forcing end_time > start_time — so a 22:00–02:00 window is representable
- * and would otherwise produce an end instant four hours BEFORE the start,
- * making the session look permanently in overtime the moment it begins.
- * An end at or before the start can only mean it wraps past midnight.
- */
-function sessionEndAtIso(date: string, startTime: string, endTime: string): string {
-  const startAt = lagosInstantIso(date, startTime);
-  const endAt = lagosInstantIso(date, endTime);
-
-  if (new Date(endAt).getTime() > new Date(startAt).getTime()) {
-    return endAt;
-  }
-
-  return lagosInstantIso(nextCalendarDay(date), endTime);
-}
 
 function deriveState(attendance: AttendanceRow | undefined): FrontdeskSessionState {
   // Mirrors the derivation documented on the session_attendance table: no row
@@ -113,7 +95,7 @@ export async function getFrontdeskBoard(): Promise<FrontdeskSession[]> {
   const { data: bookingData, error: bookingError } = await supabase
     .from("bookings")
     .select(
-      "id, customer_id, service_id, session_date, session_start_time, session_end_time, total_price_kobo, amount_paid_kobo",
+      "id, customer_id, service_id, session_date, session_start_time, session_end_date, session_end_time, total_price_kobo, amount_paid_kobo",
     )
     .in("session_date", [yesterday, today])
     .order("session_start_time", { ascending: true });
@@ -187,11 +169,7 @@ export async function getFrontdeskBoard(): Promise<FrontdeskSession[]> {
         sessionStartTime: booking.session_start_time,
         sessionEndTime: booking.session_end_time,
         startAtIso: lagosInstantIso(booking.session_date, booking.session_start_time),
-        endAtIso: sessionEndAtIso(
-          booking.session_date,
-          booking.session_start_time,
-          booking.session_end_time,
-        ),
+        endAtIso: lagosInstantIso(booking.session_end_date, booking.session_end_time),
         balanceKobo,
         state,
         clockedInAtIso: row?.clocked_in_at ?? null,

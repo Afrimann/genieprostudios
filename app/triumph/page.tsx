@@ -29,6 +29,8 @@ export const metadata: Metadata = {
   description:
     "Mixing and mastering built for the moment your song needs to land — clean, balanced, radio-ready masters for artists anywhere in the world.",
   keywords: [
+    "Triumph Music Global",
+    "Triumph Music",
     "mixing and mastering",
     "online mixing engineer",
     "music mastering service",
@@ -60,10 +62,15 @@ const TRIUMPH_JSON_LD = {
   "@context": "https://schema.org",
   "@type": "Organization",
   name: "Triumph Music Global",
+  // Short forms people actually search for ("triumph music", "triumph") —
+  // helps Google tie those queries back to this entity without claiming any
+  // name the business doesn't actually go by.
+  alternateName: ["Triumph Music", "Triumph"],
   url: absoluteUrl("/triumph"),
   logo: absoluteUrl("/images/triumph-logo-mark.png"),
   description:
     "Mixing and mastering built for the moment your song needs to land — clean, balanced, radio-ready masters for artists anywhere in the world.",
+  areaServed: "Worldwide",
 };
 
 // TriumphPortfolioTeaser reads Supabase (via cookies()) — must stay

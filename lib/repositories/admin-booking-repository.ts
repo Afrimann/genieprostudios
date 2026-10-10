@@ -5,7 +5,7 @@ import { getTracksForBooking } from "@/lib/repositories/booking-tracks-repositor
 // Admin-facing booking repository — dumb data access only, same convention
 // as availability-repository.ts. Relies on RLS (bookings_select_admin/
 // bookings_update_admin/profiles_select_admin, 0010_rls_policies.sql) plus
-// the RPCs' own internal is_admin() checks (0017_admin_unresolved_and_reschedule.sql)
+// the RPCs' own internal is_admin() checks (0039_unresolved_sessions_and_realtime.sql)
 // for authorization — this file adds no redundant admin check of its own,
 // matching availability-actions.ts's existing pattern for admin-only actions.
 
@@ -13,9 +13,9 @@ export type UnresolvedBooking = {
   id: string;
   customerId: string;
   serviceId: string;
-  slotId: string;
   sessionDate: string;
   sessionStartTime: string;
+  sessionEndDate: string;
   sessionEndTime: string;
   totalPriceKobo: number;
   depositAmountKobo: number;
@@ -30,9 +30,9 @@ type UnresolvedRpcRow = {
   id: string;
   customer_id: string;
   service_id: string;
-  slot_id: string;
   session_date: string;
   session_start_time: string;
+  session_end_date: string;
   session_end_time: string;
   total_price_kobo: number;
   deposit_amount_kobo: number;
@@ -90,9 +90,9 @@ export async function getUnresolvedPastSessions(): Promise<UnresolvedBooking[]> 
       id: row.id,
       customerId: row.customer_id,
       serviceId: row.service_id,
-      slotId: row.slot_id,
       sessionDate: row.session_date,
       sessionStartTime: row.session_start_time,
+      sessionEndDate: row.session_end_date,
       sessionEndTime: row.session_end_time,
       totalPriceKobo: row.total_price_kobo,
       depositAmountKobo: row.deposit_amount_kobo,
@@ -135,13 +135,15 @@ export async function markBookingStale(bookingId: string): Promise<Booking | nul
 // ---------------------------------------------------------------------------
 // Full bookings list + detail — the "order admin" view: every booking (not
 // just unresolved ones), and a per-booking detail page with everything
-// attached to it (customer, service, the window it was carved from, its full
-// payment history, its T&Cs acceptance record).
+// attached to it (customer, service, its full payment history, its T&Cs
+// acceptance record). No more "the window it was carved from" — windows/
+// availability_slots no longer exist (0036); every date is open by default.
 // ---------------------------------------------------------------------------
 
-// sessionDate/sessionStartTime/sessionEndTime are null for an is_addon
-// booking (per-song mixing/mastering) — no studio room time was reserved.
-// See supabase/migrations/0019_addon_bookings.sql.
+// sessionDate/sessionStartTime/sessionEndDate/sessionEndTime are null for
+// an is_addon booking (per-song mixing/mastering) — no studio room time was
+// reserved. See supabase/migrations/0036_blocked_time_ranges.sql's updated
+// consistency check.
 export type AdminBookingListItem = {
   id: string;
   customerName: string | null;
@@ -149,6 +151,7 @@ export type AdminBookingListItem = {
   serviceLabel: string;
   sessionDate: string | null;
   sessionStartTime: string | null;
+  sessionEndDate: string | null;
   sessionEndTime: string | null;
   totalPriceKobo: number;
   amountPaidKobo: number;
@@ -156,15 +159,28 @@ export type AdminBookingListItem = {
   createdAt: string;
 };
 
-/** Every booking, newest first, hydrated with customer/service names — same batch-`in(...)` hydrate pattern as getUnresolvedPastSessions() above. */
+/**
+ * Every booking that's an actual sale, newest first, hydrated with
+ * customer/service names — same batch-`in(...)` hydrate pattern as
+ * getUnresolvedPastSessions() above.
+ *
+ * Excludes 'pending_deposit': a booking nobody has paid a deposit on yet
+ * isn't a sale (owner request, 2026-10-10 — "I don't want anything like
+ * awaiting deposit on the booking list in the admin side, it doesn't make
+ * sense for sale"). These rows aren't lost — they still exist in the table
+ * for the stale-pending cleanup sweep (lib/services/reminder-service.ts) to
+ * age them out to 'cancelled' — they're just not admin-list-worthy until a
+ * real payment lands and promotes them to 'deposited'/'paid_in_full'.
+ */
 export async function getAllBookingsForAdmin(): Promise<AdminBookingListItem[]> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("bookings")
     .select(
-      "id, customer_id, service_id, session_date, session_start_time, session_end_time, total_price_kobo, amount_paid_kobo, status, created_at",
+      "id, customer_id, service_id, session_date, session_start_time, session_end_date, session_end_time, total_price_kobo, amount_paid_kobo, status, created_at",
     )
+    .neq("status", "pending_deposit")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -207,6 +223,7 @@ export async function getAllBookingsForAdmin(): Promise<AdminBookingListItem[]> 
       serviceLabel: service?.label ?? "Unknown service",
       sessionDate: row.session_date,
       sessionStartTime: row.session_start_time,
+      sessionEndDate: row.session_end_date,
       sessionEndTime: row.session_end_time,
       totalPriceKobo: row.total_price_kobo,
       amountPaidKobo: row.amount_paid_kobo,
@@ -216,8 +233,8 @@ export async function getAllBookingsForAdmin(): Promise<AdminBookingListItem[]> 
   });
 }
 
-// sessionDate/sessionStartTime/sessionEndTime are null for an is_addon
-// booking — see AdminBookingListItem above.
+// sessionDate/sessionStartTime/sessionEndDate/sessionEndTime are null for
+// an is_addon booking — see AdminBookingListItem above.
 export type AdminBookingDetail = {
   id: string;
   status: BookingStatus;
@@ -225,6 +242,7 @@ export type AdminBookingDetail = {
   updatedAt: string;
   sessionDate: string | null;
   sessionStartTime: string | null;
+  sessionEndDate: string | null;
   sessionEndTime: string | null;
   totalPriceKobo: number;
   depositAmountKobo: number;
@@ -238,7 +256,6 @@ export type AdminBookingDetail = {
     priceKobo: number;
     isAddon: boolean;
   };
-  window: { id: string; date: string; startTime: string; endTime: string; status: string } | null;
   // Order contact info + per-song details — only ever set for an is_addon
   // booking. See booking.contact_name/booking_tracks, 0020_addon_song_details.sql.
   contactName: string | null;
@@ -258,11 +275,12 @@ export type AdminBookingDetail = {
 
 /**
  * Everything attached to a single booking, for the /admin/bookings/[id]
- * "order detail" page — the booking row itself plus five independent
- * lookups (customer, service, the window it was carved from, every payment
- * ever recorded against it, and its T&Cs acceptance record). Returns null
- * (not a throw) if the booking id doesn't exist, so the page can render a
- * clean "not found" rather than an error boundary.
+ * "order detail" page — the booking row itself plus four independent
+ * lookups (customer, service, every payment ever recorded against it, and
+ * its T&Cs acceptance record). No more "the window it was carved from" —
+ * windows/availability_slots no longer exist (0036). Returns null (not a
+ * throw) if the booking id doesn't exist, so the page can render a clean
+ * "not found" rather than an error boundary.
  */
 export async function getBookingDetailForAdmin(bookingId: string): Promise<AdminBookingDetail | null> {
   const supabase = await createClient();
@@ -281,24 +299,13 @@ export async function getBookingDetailForAdmin(bookingId: string): Promise<Admin
     return null;
   }
 
-  const [profileRes, serviceRes, windowRes, paymentsRes, tcRes, tracks] = await Promise.all([
+  const [profileRes, serviceRes, paymentsRes, tcRes, tracks] = await Promise.all([
     supabase.from("profiles").select("full_name, email, phone").eq("id", booking.customer_id).maybeSingle(),
     supabase
       .from("services")
       .select("id, label, category, duration_hours, price_kobo, is_addon")
       .eq("id", booking.service_id)
       .maybeSingle(),
-    // Null for an is_addon booking (per-song mixing/mastering) — no studio
-    // window was ever reserved. See 0019_addon_bookings.sql. Skipping the
-    // query entirely (rather than passing null to .eq()) avoids Postgres
-    // rejecting "null" as an invalid uuid literal.
-    booking.slot_id
-      ? supabase
-          .from("availability_slots")
-          .select("id, date, start_time, end_time, status")
-          .eq("id", booking.slot_id)
-          .maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
     supabase
       .from("payments")
       .select("id, paystack_reference, type, amount_kobo, status, verified_at, created_at")
@@ -320,9 +327,6 @@ export async function getBookingDetailForAdmin(bookingId: string): Promise<Admin
   if (serviceRes.error) {
     throw new Error(`getBookingDetailForAdmin: service lookup failed: ${serviceRes.error.message}`);
   }
-  if (windowRes.error) {
-    throw new Error(`getBookingDetailForAdmin: window lookup failed: ${windowRes.error.message}`);
-  }
   if (paymentsRes.error) {
     throw new Error(`getBookingDetailForAdmin: payments lookup failed: ${paymentsRes.error.message}`);
   }
@@ -331,7 +335,6 @@ export async function getBookingDetailForAdmin(bookingId: string): Promise<Admin
   }
 
   const service = serviceRes.data;
-  const window = windowRes.data;
   const tc = tcRes.data;
 
   return {
@@ -341,6 +344,7 @@ export async function getBookingDetailForAdmin(bookingId: string): Promise<Admin
     updatedAt: booking.updated_at,
     sessionDate: booking.session_date,
     sessionStartTime: booking.session_start_time,
+    sessionEndDate: booking.session_end_date,
     sessionEndTime: booking.session_end_time,
     totalPriceKobo: booking.total_price_kobo,
     depositAmountKobo: booking.deposit_amount_kobo,
@@ -368,9 +372,6 @@ export async function getBookingDetailForAdmin(bookingId: string): Promise<Admin
           priceKobo: 0,
           isAddon: false,
         },
-    window: window
-      ? { id: window.id, date: window.date, startTime: window.start_time, endTime: window.end_time, status: window.status }
-      : null,
     contactName: booking.contact_name,
     contactEmail: booking.contact_email,
     tracks: tracks.map((t) => ({

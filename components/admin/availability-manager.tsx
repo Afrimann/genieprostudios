@@ -4,15 +4,15 @@ import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 
-import { createSlotFormSchema, type CreateSlotFormValues } from "@/lib/validation/availability";
+import { createBlockFormSchema, type CreateBlockFormValues } from "@/lib/validation/availability";
 import {
-  addSlot,
-  closeSlotAction,
-  fetchSlotsForDateWithBookings,
+  addBlock,
+  deleteBlockAction,
+  fetchBlocksAndBookingsForDate,
 } from "@/lib/services/availability-actions";
 import type {
-  AvailabilitySlot,
-  SlotWithBookings,
+  BlockedTimeRange,
+  DateRangeBookingRow,
 } from "@/lib/repositories/availability-repository";
 import type { BookingStatus } from "@/lib/services/booking-service";
 import { useRealtimeRefresh } from "@/lib/hooks/use-realtime-refresh";
@@ -44,17 +44,6 @@ function formatTimeRange(start: string, end: string): string {
   return `${start.slice(0, 5)} – ${end.slice(0, 5)}`;
 }
 
-function statusBadgeVariant(status: AvailabilitySlot["status"]) {
-  switch (status) {
-    case "open":
-      return "default" as const;
-    case "booked":
-      return "secondary" as const;
-    case "closed":
-      return "outline" as const;
-  }
-}
-
 // Same copy/variant mapping as app/dashboard/page.tsx's STATUS_LABELS/
 // STATUS_VARIANTS — reused here rather than invented fresh so a booking's
 // status reads identically whether the customer or the admin is looking at
@@ -78,15 +67,25 @@ const BOOKING_STATUS_VARIANTS: Record<
   cancelled: "destructive",
 };
 
-const AVAILABILITY_REALTIME_TABLES = [{ table: "availability_slots" }, { table: "bookings" }];
+const AVAILABILITY_REALTIME_TABLES = [{ table: "blocked_time_ranges" }, { table: "bookings" }];
 
+/**
+ * Admin availability manager, reworked onto blocked_time_ranges (0036) —
+ * every date is open by default now, so this no longer manages an "open a
+ * slot" allowlist. Instead it shows, per selected date: existing blocks
+ * (closures) with a "Remove block" action, and bookings overlapping that
+ * date for visibility (read-only here — bookings are managed from
+ * /admin/bookings).
+ */
 export function AvailabilityManager() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(undefined);
-  const [slots, setSlots] = useState<SlotWithBookings[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [closingId, setClosingId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const [blockList, setBlockList] = useState<BlockedTimeRange[]>([]);
+  const [bookingList, setBookingList] = useState<DateRangeBookingRow[]>([]);
 
   const selectedIso = selectedDate ? toIsoDate(selectedDate) : null;
 
@@ -95,7 +94,7 @@ export function AvailabilityManager() {
     tables: AVAILABILITY_REALTIME_TABLES,
     // No-op until a date is picked — nothing is rendered to refresh yet.
     onRefresh: () => {
-      if (selectedIso) loadSlots(selectedIso);
+      if (selectedIso) loadForDate(selectedIso);
     },
   });
 
@@ -105,23 +104,25 @@ export function AvailabilityManager() {
     reset,
     setError,
     formState: { errors, isSubmitting },
-  } = useForm<CreateSlotFormValues>({
-    resolver: zodResolver(createSlotFormSchema),
+  } = useForm<CreateBlockFormValues>({
+    resolver: zodResolver(createBlockFormSchema),
   });
 
-  async function loadSlots(date: string) {
+  async function loadForDate(date: string) {
     setLoading(true);
     setLoadError(null);
-    const result = await fetchSlotsForDateWithBookings(date);
+    const result = await fetchBlocksAndBookingsForDate(date);
     setLoading(false);
 
     if (!result.success) {
       setLoadError(result.message);
-      setSlots([]);
+      setBlockList([]);
+      setBookingList([]);
       return;
     }
 
-    setSlots(result.slots);
+    setBlockList(result.data.blocks);
+    setBookingList(result.data.bookings);
   }
 
   function handleSelectDate(date: Date | undefined) {
@@ -129,20 +130,22 @@ export function AvailabilityManager() {
     reset();
 
     if (date) {
-      loadSlots(toIsoDate(date));
+      loadForDate(toIsoDate(date));
     } else {
-      setSlots([]);
+      setBlockList([]);
+      setBookingList([]);
       setLoadError(null);
     }
   }
 
-  async function onSubmit(values: CreateSlotFormValues) {
+  async function onSubmit(values: CreateBlockFormValues) {
     if (!selectedIso) return;
 
-    const result = await addSlot({
+    const result = await addBlock({
       date: selectedIso,
       startTime: values.startTime,
       endTime: values.endTime,
+      reason: values.reason,
     });
 
     if (!result.success) {
@@ -152,22 +155,22 @@ export function AvailabilityManager() {
 
     reset();
     startTransition(() => {
-      loadSlots(selectedIso);
+      loadForDate(selectedIso);
     });
   }
 
-  async function handleClose(slotId: string) {
+  async function handleRemoveBlock(blockId: string) {
     if (!selectedIso) return;
-    setClosingId(slotId);
-    const result = await closeSlotAction(slotId);
-    setClosingId(null);
+    setRemovingId(blockId);
+    const result = await deleteBlockAction(blockId);
+    setRemovingId(null);
 
     if (!result.success) {
       setLoadError(result.message);
       return;
     }
 
-    loadSlots(selectedIso);
+    loadForDate(selectedIso);
   }
 
   return (
@@ -175,7 +178,7 @@ export function AvailabilityManager() {
       <Card className="w-fit">
         <CardHeader>
           <CardTitle>Pick a date</CardTitle>
-          <CardDescription>Select a date to manage its slots.</CardDescription>
+          <CardDescription>Select a date to manage its blocked time ranges.</CardDescription>
         </CardHeader>
         <CardContent>
           <Calendar
@@ -190,11 +193,11 @@ export function AvailabilityManager() {
       <div className="flex flex-col gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>Slots for {selectedIso ?? "—"}</CardTitle>
+            <CardTitle>Blocked ranges for {selectedIso ?? "—"}</CardTitle>
             <CardDescription>
               {selectedIso
-                ? "All slots for this date, regardless of status."
-                : "Pick a date on the calendar to see its slots."}
+                ? "Every date is open by default — these ranges are closed to new bookings."
+                : "Pick a date on the calendar to see its blocks."}
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3">
@@ -203,138 +206,137 @@ export function AvailabilityManager() {
             )}
 
             {selectedIso && loading && (
-              <p className="text-sm text-muted-foreground">Loading slots…</p>
+              <p className="text-sm text-muted-foreground">Loading…</p>
             )}
 
             {selectedIso && !loading && loadError && (
               <p className="text-sm text-destructive">{loadError}</p>
             )}
 
-            {selectedIso && !loading && !loadError && slots.length === 0 && (
+            {selectedIso && !loading && !loadError && blockList.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                No slots yet for this date. Add one below.
+                No blocks for this date — it&apos;s fully open. Block a time range below.
               </p>
             )}
 
             {selectedIso &&
               !loading &&
-              slots.map((slot) => (
+              blockList.map((block) => (
                 <div
-                  key={slot.id}
-                  className="flex flex-col gap-2 rounded-lg border border-border px-3 py-2"
+                  key={block.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2"
                 >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium">
-                        {formatTimeRange(slot.start_time, slot.end_time)}
-                      </span>
-                      <Badge variant={statusBadgeVariant(slot.status)}>{slot.status}</Badge>
-                    </div>
-
-                    {/* Closing a window only stops new bookings from being
-                        carved out of it — it's independent of whatever
-                        bookings are already nested underneath, so this stays
-                        available regardless of the list below. */}
-                    {slot.status === "open" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={closingId === slot.id}
-                        onClick={() => handleClose(slot.id)}
-                      >
-                        {closingId === slot.id ? "Closing…" : "Close"}
-                      </Button>
+                  <div className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium">
+                      {formatTimeRange(block.start_time, block.end_time)}
+                    </span>
+                    {block.reason && (
+                      <span className="text-xs text-muted-foreground">{block.reason}</span>
                     )}
                   </div>
-
-                  {slot.bookings.length > 0 && (
-                    <div className="flex flex-col gap-1.5 border-l border-border pl-3">
-                      {slot.bookings.map((booking) => (
-                        <div
-                          key={booking.id}
-                          className="flex items-center justify-between gap-3 text-xs"
-                        >
-                          <span className="text-muted-foreground">
-                            {/* Non-null by construction: every booking in a window's own
-                                list has a real slot_id, and slot_id/session_* fields are
-                                only ever null together for an is_addon booking (see
-                                0019_addon_bookings.sql's consistency check) — an addon
-                                booking has no slot_id, so it can never appear here. */}
-                            {formatTimeRange(
-                              booking.session_start_time!,
-                              booking.session_end_time!,
-                            )}
-                          </span>
-                          <Badge variant={BOOKING_STATUS_VARIANTS[booking.status]}>
-                            {BOOKING_STATUS_LABELS[booking.status]}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {slot.bookings.length === 0 && (
-                    <p className="pl-3 text-xs text-muted-foreground">
-                      No bookings yet in this window.
-                    </p>
-                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={removingId === block.id}
+                    onClick={() => handleRemoveBlock(block.id)}
+                  >
+                    {removingId === block.id ? "Removing…" : "Remove block"}
+                  </Button>
                 </div>
               ))}
+
+            {selectedIso && !loading && bookingList.length > 0 && (
+              <>
+                <Separator />
+                <p className="text-xs font-medium text-muted-foreground">
+                  Bookings overlapping this date
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  {bookingList.map((booking) => (
+                    <div
+                      key={booking.id}
+                      className="flex items-center justify-between gap-3 text-xs"
+                    >
+                      <span className="text-muted-foreground">
+                        {booking.session_start_time && booking.session_end_time
+                          ? formatTimeRange(booking.session_start_time, booking.session_end_time)
+                          : "—"}
+                      </span>
+                      <Badge variant={BOOKING_STATUS_VARIANTS[booking.status]}>
+                        {BOOKING_STATUS_LABELS[booking.status]}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Add a slot</CardTitle>
+            <CardTitle>Block a time range</CardTitle>
             <CardDescription>
-              Opens a new time slot on {selectedIso ?? "the selected date"}. A 30-minute
-              buffer from any existing slot is required.
+              Closes this time range on {selectedIso ?? "the selected date"} to new bookings. A
+              30-minute buffer from any existing, still-live booking is enforced.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form
-              onSubmit={handleSubmit(onSubmit)}
-              className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-3"
-            >
-              <div className="flex flex-1 flex-col gap-1.5">
-                <Label htmlFor="startTime">Start time</Label>
-                <Input
-                  id="startTime"
-                  type="time"
-                  aria-invalid={!!errors.startTime}
-                  disabled={!selectedIso}
-                  {...register("startTime")}
-                />
-                {errors.startTime && (
-                  <p className="text-sm text-destructive">{errors.startTime.message}</p>
-                )}
+            <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-3">
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Label htmlFor="startTime">Start time</Label>
+                  <Input
+                    id="startTime"
+                    type="time"
+                    aria-invalid={!!errors.startTime}
+                    disabled={!selectedIso}
+                    {...register("startTime")}
+                  />
+                  {errors.startTime && (
+                    <p className="text-sm text-destructive">{errors.startTime.message}</p>
+                  )}
+                </div>
+
+                <div className="flex flex-1 flex-col gap-1.5">
+                  <Label htmlFor="endTime">End time</Label>
+                  <Input
+                    id="endTime"
+                    type="time"
+                    aria-invalid={!!errors.endTime}
+                    disabled={!selectedIso}
+                    {...register("endTime")}
+                  />
+                  {errors.endTime && (
+                    <p className="text-sm text-destructive">{errors.endTime.message}</p>
+                  )}
+                </div>
+
+                <Button type="submit" disabled={!selectedIso || isSubmitting || isPending}>
+                  {isSubmitting ? "Blocking…" : "Block range"}
+                </Button>
               </div>
 
-              <div className="flex flex-1 flex-col gap-1.5">
-                <Label htmlFor="endTime">End time</Label>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="reason">Reason (optional)</Label>
                 <Input
-                  id="endTime"
-                  type="time"
-                  aria-invalid={!!errors.endTime}
+                  id="reason"
+                  placeholder="e.g. Maintenance, owner unavailable"
                   disabled={!selectedIso}
-                  {...register("endTime")}
+                  {...register("reason")}
                 />
-                {errors.endTime && (
-                  <p className="text-sm text-destructive">{errors.endTime.message}</p>
+                {errors.reason && (
+                  <p className="text-sm text-destructive">{errors.reason.message}</p>
                 )}
               </div>
-
-              <Button type="submit" disabled={!selectedIso || isSubmitting || isPending}>
-                {isSubmitting ? "Adding…" : "Add slot"}
-              </Button>
             </form>
           </CardContent>
         </Card>
 
         <Separator />
         <p className="text-xs text-muted-foreground">
-          Closing a slot only affects open slots — booked slots represent a committed
-          session and can&apos;t be withdrawn from here.
+          Removing a block immediately re-opens that time range to new bookings — it has no
+          effect on bookings already made.
         </p>
       </div>
     </div>

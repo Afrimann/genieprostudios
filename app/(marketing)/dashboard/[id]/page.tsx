@@ -50,6 +50,25 @@ function formatTimeRange(start: string, end: string): string {
   return `${start.slice(0, 5)} – ${end.slice(0, 5)}`;
 }
 
+/**
+ * "11:00 PM – 2:00 AM (Oct 11)" when sessionEndDate differs from
+ * sessionDate (an overnight session — see bookings.session_end_date,
+ * 0036_blocked_time_ranges.sql), else the plain single-date format —
+ * mirrors lib/services/email-service.ts's formatSessionLine convention.
+ */
+function formatSessionTime(
+  start: string,
+  end: string,
+  sessionDate: string | null,
+  sessionEndDate: string | null,
+): string {
+  if (sessionEndDate && sessionDate && sessionEndDate !== sessionDate) {
+    return `${formatTimeRange(start, end)} (ends ${sessionEndDate})`;
+  }
+
+  return formatTimeRange(start, end);
+}
+
 function DetailCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5">
@@ -89,7 +108,7 @@ async function BookingDetail({ id }: { id: string }) {
           </h1>
           <p className="text-sm text-muted-foreground">
             {hasSession
-              ? `${booking.sessionDate} · ${formatTimeRange(booking.sessionStartTime!, booking.sessionEndTime!)}`
+              ? `${booking.sessionDate} · ${formatSessionTime(booking.sessionStartTime!, booking.sessionEndTime!, booking.sessionDate, booking.sessionEndDate)}`
               : "Per-song add-on — no studio time reserved"}
           </p>
         </div>
@@ -112,7 +131,12 @@ async function BookingDetail({ id }: { id: string }) {
               <Field label="Date" value={booking.sessionDate} />
               <Field
                 label="Time"
-                value={formatTimeRange(booking.sessionStartTime!, booking.sessionEndTime!)}
+                value={formatSessionTime(
+                  booking.sessionStartTime!,
+                  booking.sessionEndTime!,
+                  booking.sessionDate,
+                  booking.sessionEndDate,
+                )}
               />
             </>
           ) : (

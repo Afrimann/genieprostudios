@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -25,7 +24,6 @@ const fieldIconClass =
   "pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground";
 
 export function LoginForm({ redirectTo, reason }: LoginFormProps) {
-  const router = useRouter();
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
@@ -47,9 +45,20 @@ export function LoginForm({ redirectTo, reason }: LoginFormProps) {
       return;
     }
 
+    // A real browser navigation, not router.push(): the login Server Action
+    // above just set the session cookie, but Next's client Router Cache can
+    // still serve a stale, pre-login snapshot of the destination route (e.g.
+    // one prefetched while signed out) — its layout would then see no
+    // session and bounce back to /login, which is exactly the "bounces back
+    // to login, works the second time" bug this fixes (found live,
+    // 2026-10-10, affecting customer/admin/frontdesk login alike since they
+    // all share this component). window.location.href forces a fresh
+    // request that reliably carries the just-set cookie — same reasoning as
+    // the Paystack checkout redirect in components/booking/booking-flow.tsx.
+    //
     // Never push `redirectTo` raw — it comes straight from a URL search
     // param an attacker controls. See lib/utils/safe-redirect.ts.
-    router.push(safeRedirectPath(redirectTo));
+    window.location.href = safeRedirectPath(redirectTo);
   }
 
   return (

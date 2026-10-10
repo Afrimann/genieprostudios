@@ -152,6 +152,7 @@ export async function confirmPaymentByReference(
             sessionDate: booking.session_date,
             sessionStartTime: booking.session_start_time,
             sessionEndTime: booking.session_end_time,
+            sessionEndDate: booking.session_end_date,
             amountPaidKobo: newAmountPaidKobo,
             totalPriceKobo: booking.total_price_kobo,
             status: newStatus,
@@ -170,6 +171,7 @@ export async function confirmPaymentByReference(
             sessionDate: booking.session_date,
             sessionStartTime: booking.session_start_time,
             sessionEndTime: booking.session_end_time,
+            sessionEndDate: booking.session_end_date,
             amountPaidKobo: newAmountPaidKobo,
             totalPriceKobo: booking.total_price_kobo,
             status: newStatus,
@@ -184,6 +186,7 @@ export async function confirmPaymentByReference(
           sessionDate: booking.session_date,
           sessionStartTime: booking.session_start_time,
           sessionEndTime: booking.session_end_time,
+          sessionEndDate: booking.session_end_date,
           totalPriceKobo: booking.total_price_kobo,
           siteUrl: SITE_URL,
         });

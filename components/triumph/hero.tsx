@@ -110,6 +110,13 @@ export function TriumphHero() {
         animate="show"
         className="flex flex-col justify-center gap-6 px-6 py-20 sm:px-10 md:px-14 lg:px-20"
       >
+        <motion.span
+          variants={item}
+          className="text-xs font-medium tracking-[0.2em] text-[#22e6c8] uppercase"
+        >
+          Triumph Music Global
+        </motion.span>
+
         <motion.h1
           variants={item}
           className="max-w-xl font-heading text-5xl leading-[1.05] font-medium tracking-tight text-foreground sm:text-6xl"

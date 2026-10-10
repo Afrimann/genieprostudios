@@ -4,20 +4,23 @@ import { useCallback, useEffect, useState } from "react";
 
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
 import type { Service } from "@/lib/repositories/service-repository";
-import type { AvailabilitySlot } from "@/lib/repositories/availability-repository";
 import type { Booking } from "@/lib/services/booking-service";
 import type { StartTimeOption } from "@/lib/services/availability-service";
 import {
   createAddonBooking,
   createPendingBooking,
-  fetchOpenDates,
-  fetchOpenSlots,
   fetchServices,
   fetchValidStartTimes,
   saveBookingTrack,
 } from "@/lib/services/booking-flow-actions";
 
-export type BookingStep = "service" | "songs" | "date" | "window" | "startTime" | "summary";
+export type BookingStep =
+  | "service"
+  | "songs"
+  | "date"
+  | "startTime"
+  | "equipment"
+  | "summary";
 
 // Per-song upload progress, indexed the same as the songs array passed to
 // submitAddonSongs — "done" entries are skipped on retry so a failed song
@@ -52,18 +55,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-// How far ahead the date picker looks for open dates. 60 days is a
-// reasonable planning horizon for a studio booking that doesn't (yet) need
-// to be configurable.
-const DATE_RANGE_DAYS = 60;
-
-function toIsoDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 /**
  * Thin React-facing glue for the customer booking flow (Component -> Hook
  * -> Service, per project-notes.md). Owns step state and delegates every
@@ -73,12 +64,13 @@ function toIsoDate(date: Date): string {
  * presentational: they render {step, data, loading, error} and call the
  * actions this hook exposes.
  *
- * 0014 note: "slot" now means a continuous admin-opened *window*
- * (AvailabilitySlot), not a single bookable unit. The step machine grew a
- * "window" step (pick which window, skipped automatically when a date has
- * exactly one) and a "startTime" step (pick a 30-minute-grid-aligned start
- * time inside the chosen window, computed server-side by
- * fetchValidStartTimes) in place of the old flat "slot" step.
+ * 0036/0037 note: every date is open by default now — there is no more
+ * admin-opened "window" concept (the old AvailabilitySlot/"window" step is
+ * gone). selectDate goes straight from the "date" step to loading
+ * date-scoped valid start times (fetchValidStartTimes(date, serviceId)) for
+ * the "startTime" step. A new read-only "equipment" step sits between
+ * "startTime" and "summary" — same is_addon skip rule as the date/startTime
+ * steps (see startBookingForService below).
  */
 export function useBookingFlow(initialServiceId?: string) {
   const [step, setStep] = useState<BookingStep>("service");
@@ -89,17 +81,7 @@ export function useBookingFlow(initialServiceId?: string) {
 
   const [selectedService, setSelectedService] = useState<Service | null>(null);
 
-  const [openDates, setOpenDates] = useState<string[]>([]);
-  const [datesLoading, setDatesLoading] = useState(false);
-  const [datesError, setDatesError] = useState<string | null>(null);
-
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-
-  const [windows, setWindows] = useState<AvailabilitySlot[]>([]);
-  const [windowsLoading, setWindowsLoading] = useState(false);
-  const [windowsError, setWindowsError] = useState<string | null>(null);
-
-  const [selectedWindow, setSelectedWindow] = useState<AvailabilitySlot | null>(null);
 
   const [startTimeOptions, setStartTimeOptions] = useState<StartTimeOption[]>([]);
   const [startTimesLoading, setStartTimesLoading] = useState(false);
@@ -117,31 +99,12 @@ export function useBookingFlow(initialServiceId?: string) {
   const [songStatuses, setSongStatuses] = useState<SongUploadStatus[]>([]);
   const [songErrorMessages, setSongErrorMessages] = useState<(string | null)[]>([]);
 
-  const loadOpenDates = useCallback(async () => {
-    setDatesLoading(true);
-    setDatesError(null);
-
-    const today = new Date();
-    const end = new Date();
-    end.setDate(end.getDate() + DATE_RANGE_DAYS);
-
-    const result = await fetchOpenDates(toIsoDate(today), toIsoDate(end));
-    setDatesLoading(false);
-
-    if (!result.success) {
-      setDatesError(result.message);
-      return;
-    }
-
-    setOpenDates(result.dates);
-  }, []);
-
-  const loadStartTimesForWindow = useCallback(
-    async (windowId: string, serviceId: string) => {
+  const loadStartTimesForDate = useCallback(
+    async (date: string, serviceId: string) => {
       setStartTimesLoading(true);
       setStartTimesError(null);
 
-      const result = await fetchValidStartTimes(windowId, serviceId);
+      const result = await fetchValidStartTimes(date, serviceId);
       setStartTimesLoading(false);
 
       if (!result.success) {
@@ -155,57 +118,12 @@ export function useBookingFlow(initialServiceId?: string) {
     [],
   );
 
-  // Moves to the start-time step for a chosen window and kicks off its
-  // fetch — called directly (never from an effect) both when a window is
-  // explicitly picked and when loadWindowsForDate auto-selects the sole
-  // window for a date, so there's exactly one place that performs this
-  // transition.
-  const chooseWindow = useCallback(
-    (window: AvailabilitySlot, serviceId: string) => {
-      setSelectedWindow(window);
-      setStep("startTime");
-      loadStartTimesForWindow(window.id, serviceId);
-    },
-    [loadStartTimesForWindow],
-  );
-
-  /**
-   * Loads the open windows for a date. If there's exactly one, auto-selects
-   * it and skips straight to the start-time step (one fewer click for the
-   * common case); if there's more than one, stays on the "window" step so
-   * the customer can pick which one. Also used to refresh the window list
-   * after a booking attempt so a window whose only remaining gaps got
-   * consumed doesn't linger looking pristine.
-   */
-  const loadWindowsForDate = useCallback(
-    async (date: string, serviceId: string) => {
-      setWindowsLoading(true);
-      setWindowsError(null);
-
-      const result = await fetchOpenSlots(date);
-      setWindowsLoading(false);
-
-      if (!result.success) {
-        setWindowsError(result.message);
-        setWindows([]);
-        return;
-      }
-
-      setWindows(result.slots);
-
-      if (result.slots.length === 1) {
-        chooseWindow(result.slots[0], serviceId);
-      }
-    },
-    [chooseWindow],
-  );
-
   /**
    * Shared by selectService (customer clicks a package) and the mount
    * effect's initialServiceId pre-select (arriving via /book?service=...).
    * is_addon services (e.g. per-song mixing/mastering, duration_hours = 0 —
    * see 0002_services.sql) have no studio room time to reserve at all, so
-   * they skip the date -> window -> start-time steps entirely and go to the
+   * they skip the date -> startTime -> equipment steps entirely and go to the
    * "songs" step instead, where the customer supplies contact info plus a
    * title + WAV file per song. The booking itself isn't created yet here —
    * its price depends on how many songs the customer submits, so creation
@@ -226,9 +144,8 @@ export function useBookingFlow(initialServiceId?: string) {
       }
 
       setStep("date");
-      loadOpenDates();
     },
-    [loadOpenDates],
+    [],
   );
 
   /**
@@ -393,18 +310,17 @@ export function useBookingFlow(initialServiceId?: string) {
     startBookingForService(service);
   }
 
+  /**
+   * Every date is open by default now (0036/0037) — there is no window step
+   * to pass through, so picking a date goes straight to loading that date's
+   * valid start times for the "startTime" step.
+   */
   function selectDate(date: string) {
     if (!selectedService) return;
 
     setSelectedDate(date);
-    setSelectedWindow(null);
-    setStep("window");
-    loadWindowsForDate(date, selectedService.id);
-  }
-
-  function selectWindow(window: AvailabilitySlot) {
-    if (!selectedService) return;
-    chooseWindow(window, selectedService.id);
+    setStep("startTime");
+    loadStartTimesForDate(date, selectedService.id);
   }
 
   function backToService() {
@@ -434,15 +350,7 @@ export function useBookingFlow(initialServiceId?: string) {
 
     setSelectedService(null);
 
-    setOpenDates([]);
-    setDatesLoading(false);
-    setDatesError(null);
     setSelectedDate(null);
-
-    setWindows([]);
-    setWindowsLoading(false);
-    setWindowsError(null);
-    setSelectedWindow(null);
 
     setStartTimeOptions([]);
     setStartTimesLoading(false);
@@ -460,24 +368,29 @@ export function useBookingFlow(initialServiceId?: string) {
 
   function backToDate() {
     setStep("date");
-    setSelectedWindow(null);
-    setWindows([]);
-  }
-
-  function backToWindow() {
-    setStep("window");
     setStartTimeOptions([]);
     setStartTimesError(null);
   }
 
+  /**
+   * Read-only "equipment" step, inserted between "startTime" and "summary"
+   * (skipped for is_addon services, same as date/startTime) — nothing is
+   * written to the booking here, so there's no corresponding
+   * select/submit, just a forward transition once the customer has seen
+   * the inventory list.
+   */
+  function continueFromEquipment() {
+    setStep("summary");
+  }
+
   async function selectStartTime(option: StartTimeOption) {
-    if (!selectedService || !selectedWindow) return;
+    if (!selectedService || !selectedDate) return;
 
     setBookingSubmitting(true);
     setBookingError(null);
 
     const result = await createPendingBooking(
-      selectedWindow.id,
+      selectedDate,
       selectedService.id,
       option.startTime,
     );
@@ -488,25 +401,16 @@ export function useBookingFlow(initialServiceId?: string) {
 
       // Any failure (most notably time_unavailable — someone else just
       // booked overlapping time) bounces back to a fresh start-time fetch
-      // so a just-taken time disappears immediately — no double-booking in
-      // the UI, per project-notes.md. slot_taken (window itself closed in
-      // the meantime) instead falls back to re-loading the window list for
-      // the date, since the window itself is no longer valid.
-      if (result.error === "slot_taken" && selectedDate) {
-        setSelectedWindow(null);
-        setStep("window");
-        loadWindowsForDate(selectedDate, selectedService.id);
-        return;
-      }
-
-      if (selectedWindow && selectedService) {
-        loadStartTimesForWindow(selectedWindow.id, selectedService.id);
+      // for the same date so a just-taken time disappears immediately — no
+      // double-booking in the UI, per project-notes.md.
+      if (selectedDate && selectedService) {
+        loadStartTimesForDate(selectedDate, selectedService.id);
       }
       return;
     }
 
     setBooking(result.booking);
-    setStep("summary");
+    setStep("equipment");
   }
 
   return {
@@ -522,25 +426,17 @@ export function useBookingFlow(initialServiceId?: string) {
     songErrorMessages,
     submitAddonSongs,
 
-    openDates,
-    datesLoading,
-    datesError,
     selectedDate,
     selectDate,
     backToService,
-
-    windows,
-    windowsLoading,
-    windowsError,
-    selectedWindow,
-    selectWindow,
-    backToDate,
 
     startTimeOptions,
     startTimesLoading,
     startTimesError,
     selectStartTime,
-    backToWindow,
+    backToDate,
+
+    continueFromEquipment,
     resetFlow,
 
     bookingSubmitting,

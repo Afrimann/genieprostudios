@@ -5,13 +5,21 @@ import { lagosDateOffset, lagosInstantIso } from "@/lib/utils/lagos-time";
 // — a handful of independent counts/sums, each its own small query rather
 // than one large join, since they don't share a filter shape. Relies on RLS
 // (bookings_select_admin/payments_select_admin/portfolio_entries_select_admin,
-// 0010_rls_policies.sql; availability_slots' public-open-select policy
-// covers the open-windows count too; session_attendance_select_admin,
+// 0010_rls_policies.sql; blocked_time_ranges_select_admin, 0036, for the
+// blocked-ranges count; session_attendance_select_admin,
 // 0033_session_attendance.sql, for the ongoing-session count) — no admin
 // check of its own, same convention as availability-repository.ts/
 // admin-booking-repository.ts.
+//
+// 0036/0037 note: availability_slots/the "open windows" concept no longer
+// exists — every date is open by default now, and admins instead mark
+// closures (blocked_time_ranges). openWindowsCount is replaced by
+// upcomingBlocksCount (admin-marked closures still ahead of today), which
+// is the closest equivalent "how much am I managing" signal in the new
+// model — it is NOT a count of bookable capacity (there's no such concept
+// anymore).
 export type AdminDashboardStats = {
-  openWindowsCount: number;
+  upcomingBlocksCount: number;
   upcomingBookingsCount: number;
   /** 0 or 1 in practice — the booth can only hold one session at a time. See getAdminDashboardStats' own comment. */
   ongoingSessionCount: number;
@@ -48,7 +56,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   const upcomingWindowStartIso = lagosDateOffset(-1);
 
   const [
-    openWindows,
+    upcomingBlocks,
     upcomingBookingsRows,
     ongoingSession,
     unresolved,
@@ -57,9 +65,8 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
     portfolioTotal,
   ] = await Promise.all([
     supabase
-      .from("availability_slots")
+      .from("blocked_time_ranges")
       .select("id", { count: "exact", head: true })
-      .eq("status", "open")
       .gte("date", todayIso),
     // Previously `.select("id", { count: "exact", head: true })` filtered
     // only by `session_date >= todayIso` — a bare calendar-day comparison.
@@ -98,8 +105,8 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
     supabase.from("portfolio_entries").select("id", { count: "exact", head: true }),
   ]);
 
-  if (openWindows.error) {
-    throw new Error(`getAdminDashboardStats: openWindows: ${openWindows.error.message}`);
+  if (upcomingBlocks.error) {
+    throw new Error(`getAdminDashboardStats: upcomingBlocks: ${upcomingBlocks.error.message}`);
   }
   if (upcomingBookingsRows.error) {
     throw new Error(`getAdminDashboardStats: upcomingBookings: ${upcomingBookingsRows.error.message}`);
@@ -138,7 +145,7 @@ export async function getAdminDashboardStats(): Promise<AdminDashboardStats> {
   );
 
   return {
-    openWindowsCount: openWindows.count ?? 0,
+    upcomingBlocksCount: upcomingBlocks.count ?? 0,
     upcomingBookingsCount,
     ongoingSessionCount: ongoingSession.count ?? 0,
     unresolvedCount: (unresolved.data ?? []).length,
