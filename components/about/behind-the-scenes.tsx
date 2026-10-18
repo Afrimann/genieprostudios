@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { Play } from "lucide-react";
 
 import { Reveal } from "@/components/ui/reveal";
 import { AmbientVideo } from "@/components/media/ambient-video";
+import { StudioRevealTile } from "@/components/about/studio-reveal";
 
 // Real footage from actual studio shoots — a silent "video wall" (grid
 // tiles autoplay muted/looped, same texture-not-content role as a photo,
@@ -15,10 +15,10 @@ import { AmbientVideo } from "@/components/media/ambient-video";
 // browser allows autoplaying audio, muted-by-default-with-opt-in-unmute is
 // the only honest way to offer sound here. Its audio track is the shoot's
 // own ambient track from bts-dance.mp4's source (IMG_0578), not the
-// trumpet performance's original audio. The "walkthrough coming soon" tile
-// stays — the owner's dedicated video is still pending (see
-// app/(marketing)/about/page.tsx's prior placeholder) and now lives inside
-// the grid instead of standing alone.
+// trumpet performance's original audio. The old "walkthrough coming soon"
+// tile is now StudioRevealTile (components/about/studio-reveal.tsx) — a
+// full-screen cinematic slideshow built from the 2026-10-18 studio photo
+// drop, since a dedicated walkthrough video is still pending.
 const GRID_CLIPS = [
   {
     src: "/videos/bts-drummer.mp4",
@@ -77,19 +77,6 @@ function GridTile({ src, poster, alt }: { src: string; poster: string; alt: stri
   );
 }
 
-function ComingSoonTile() {
-  return (
-    <div className="bg-grain relative flex aspect-square w-full flex-col items-center justify-center gap-2 overflow-hidden border border-border bg-card p-4 text-center">
-      <div className="relative z-[1] flex size-10 items-center justify-center rounded-none border border-[var(--amber-glow)]/50 bg-[var(--amber-glow)]/10">
-        <Play className="size-4 text-[var(--amber-glow)]" aria-hidden="true" />
-      </div>
-      <p className="relative z-[1] text-xs leading-snug text-muted-foreground">
-        Full studio walkthrough — coming soon
-      </p>
-    </div>
-  );
-}
-
 function FeaturedReel() {
   return (
     <div className="relative col-span-2 row-span-2 aspect-square w-full overflow-hidden border border-[var(--amber-glow)]/40 bg-background sm:aspect-auto">
@@ -123,7 +110,7 @@ export function BehindTheScenes() {
           {GRID_CLIPS.map((clip) => (
             <GridTile key={clip.src} {...clip} />
           ))}
-          <ComingSoonTile />
+          <StudioRevealTile />
         </div>
       </Reveal>
     </section>
