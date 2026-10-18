@@ -70,124 +70,75 @@ const item = {
   },
 };
 
-// Decorative waveform + rotating ring, same visual language as the homepage
-// Hero's DecorativeRings/LiveMeter (components/home/hero.tsx) so this page
-// reads as part of the same site rather than a one-off. Purely decorative —
-// aria-hidden.
-function HeroGraphic() {
-  const bars = [0.4, 0.7, 1, 0.55, 0.85, 0.35, 0.95, 0.5, 0.75, 0.45, 0.65, 0.3];
-
-  return (
-    <div className="relative mx-auto aspect-square w-full max-w-sm">
-      <svg
-        viewBox="0 0 100 100"
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 h-full w-full"
-      >
-        <motion.circle
-          cx="50"
-          cy="50"
-          r="47"
-          fill="none"
-          stroke="var(--amber-glow)"
-          strokeWidth={0.5}
-          strokeDasharray="1 10"
-          style={{ opacity: 0.35 }}
-          animate={{ rotate: 360 }}
-          transition={{ duration: 100, repeat: Infinity, ease: "linear" }}
-        />
-        <motion.circle
-          cx="50"
-          cy="50"
-          r="41"
-          fill="none"
-          stroke="var(--moss)"
-          strokeWidth={0.5}
-          strokeDasharray="0.5 6"
-          style={{ opacity: 0.3 }}
-          animate={{ rotate: -360 }}
-          transition={{ duration: 140, repeat: Infinity, ease: "linear" }}
-        />
-      </svg>
-
-      <div className="absolute inset-[14%] flex items-center justify-center rounded-none border border-border bg-card">
-        <div className="flex items-end gap-[5px]" aria-hidden="true">
-          {bars.map((mult, i) => (
-            <motion.span
-              key={i}
-              className="w-[6px] rounded-none bg-[var(--amber-glow)]"
-              initial={{ height: 6 }}
-              animate={{ height: [6, 64 * mult, 6] }}
-              transition={{
-                duration: 1.6 + (i % 4) * 0.25,
-                repeat: Infinity,
-                ease: "easeInOut",
-                delay: i * 0.08,
-              }}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function AboutPage() {
   return (
     <main className="flex flex-col">
-      <section className="bg-grain relative overflow-hidden border-b border-border bg-background">
-        <div className="relative z-[1] mx-auto grid w-full max-w-6xl grid-cols-1 items-center gap-16 px-6 py-24 md:grid-cols-[1.1fr_0.9fr] md:py-32">
-          <motion.div
-            variants={container}
-            initial="hidden"
-            animate="show"
-            className="order-2 flex flex-col items-start gap-5 md:order-1"
-          >
-            <motion.span
-              variants={item}
-              className="text-xs font-medium tracking-[0.2em] text-[var(--amber-glow)] uppercase"
-            >
-              About the studio
-            </motion.span>
-            <motion.h1
-              variants={item}
-              className="font-heading text-5xl leading-[1.05] font-medium tracking-tight text-foreground sm:text-6xl"
-            >
-              Built for the room, and the take that happens in it.
-            </motion.h1>
-            <motion.p
-              variants={item}
-              className="max-w-xl text-base leading-relaxed text-muted-foreground sm:text-lg"
-            >
-              Genie Pro Studios started as a home for gospel sessions that needed to be
-              captured properly — not just recorded, but held onto exactly as they
-              happened. That&apos;s still the job today: rehearsal space to prepare, a full
-              recording setup to capture it, and mixing and mastering to finish it, all in
-              one place.
-            </motion.p>
-            <motion.div variants={item} className="flex flex-wrap items-center gap-4 pt-2">
-              <Button
-                asChild
-                size="lg"
-                className="h-12 rounded-none bg-[var(--amber-glow)] px-7 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
-              >
-                <Link href="/book">Book a session</Link>
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                size="lg"
-                className="h-12 rounded-none border-border/60 bg-transparent px-7 text-sm font-medium text-foreground hover:bg-secondary"
-              >
-                <Link href="/services">View services</Link>
-              </Button>
-            </motion.div>
-          </motion.div>
+      {/* Full-bleed photo hero, replacing the old split layout (text column
+          + small decorative graphic box) now that there's real studio
+          photography to lead with. bg-grain goes on the section root, not
+          an inner absolutely-positioned box — combining it with `absolute`
+          silently collapses that box's height, since .bg-grain (globals.css)
+          hardcodes position:relative (bit this once already on the
+          engineer-photo frame above). */}
+      <section className="bg-grain relative flex min-h-[88vh] items-end overflow-hidden border-b border-border">
+        <Image
+          src="/images/studio/IMG_9488..jpg"
+          alt="A vocalist performing on stage, seen past two silhouetted crew members in the room"
+          fill
+          sizes="100vw"
+          priority
+          className="object-cover"
+        />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-background via-background/55 to-background/10" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-background/70 via-background/10 to-transparent" />
 
-          <div className="order-1 md:order-2">
-            <HeroGraphic />
-          </div>
-        </div>
+        <motion.div
+          variants={container}
+          initial="hidden"
+          animate="show"
+          className="relative z-[1] mx-auto flex w-full max-w-6xl flex-col items-start gap-5 px-6 pt-32 pb-16 md:pb-24"
+        >
+          <motion.span
+            variants={item}
+            className="flex items-center gap-3 text-xs font-medium tracking-[0.2em] text-[var(--amber-glow)] uppercase"
+          >
+            <span className="h-px w-8 bg-[var(--amber-glow)]" aria-hidden="true" />
+            About the studio
+          </motion.span>
+          <motion.h1
+            variants={item}
+            className="max-w-2xl font-heading text-5xl leading-[1.05] font-medium tracking-tight text-foreground sm:text-6xl"
+          >
+            Built for the room, and the take that happens in it.
+          </motion.h1>
+          <motion.p
+            variants={item}
+            className="max-w-xl text-base leading-relaxed text-foreground/70 sm:text-lg"
+          >
+            Genie Pro Studios started as a home for gospel sessions that needed to be
+            captured properly — not just recorded, but held onto exactly as they
+            happened. That&apos;s still the job today: rehearsal space to prepare, a full
+            recording setup to capture it, and mixing and mastering to finish it, all in
+            one place.
+          </motion.p>
+          <motion.div variants={item} className="flex flex-wrap items-center gap-4 pt-2">
+            <Button
+              asChild
+              size="lg"
+              className="h-12 rounded-none bg-[var(--amber-glow)] px-7 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
+            >
+              <Link href="/book">Book a session</Link>
+            </Button>
+            <Button
+              asChild
+              variant="outline"
+              size="lg"
+              className="h-12 rounded-none border-[#f3eee0]/30 bg-transparent px-7 text-sm font-medium text-foreground hover:bg-[#f3eee0]/10"
+            >
+              <Link href="/services">View services</Link>
+            </Button>
+          </motion.div>
+        </motion.div>
       </section>
 
       <section className="relative overflow-hidden border-b border-border bg-card py-10">
@@ -282,8 +233,8 @@ export default function AboutPage() {
       </section>
 
       <section className="border-b border-border bg-background">
-        <div className="mx-auto grid w-full max-w-5xl grid-cols-1 gap-x-12 gap-y-16 px-6 py-24 sm:grid-cols-2">
-          <Reveal className="relative flex flex-col gap-4">
+        <div className="mx-auto max-w-5xl px-6 py-24">
+          <Reveal className="relative flex max-w-md flex-col gap-4">
             <span
               aria-hidden="true"
               className="font-heading text-8xl font-medium text-foreground/[0.06] select-none"
@@ -293,23 +244,47 @@ export default function AboutPage() {
             <h2 className="font-heading text-2xl font-medium text-foreground">
               The space
             </h2>
-            <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
+            <p className="text-sm leading-relaxed text-muted-foreground">
               A room built to record live takes, not just isolate them — from full-band
               rehearsals to spontaneous worship sessions, with the acoustics and setup
               to keep a take usable straight out of the session.
             </p>
           </Reveal>
+        </div>
+      </section>
+
+      <section
+        className="bg-grain relative overflow-hidden border-b border-border"
+        style={{ backgroundColor: "#6b2a1e" }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-b from-black/10 via-transparent to-black/30" />
+        <div className="relative z-[1] mx-auto grid w-full max-w-5xl grid-cols-1 items-center gap-12 px-6 py-20 md:grid-cols-[0.85fr_1fr] md:py-28">
+          <Reveal className="mx-auto w-full max-w-sm md:mx-0">
+            <div className="relative aspect-[4/5] w-full overflow-hidden border border-[#f3eee0]/20 shadow-2xl">
+              <Image
+                src="/images/IMG_7043.JPG"
+                alt="The engineer — portrait of the person who runs every session at Genie Pro Studios"
+                fill
+                sizes="(max-width: 768px) 100vw, 480px"
+                className="object-cover"
+                priority
+              />
+            </div>
+          </Reveal>
           <Reveal delay={0.1} className="relative flex flex-col gap-4">
             <span
               aria-hidden="true"
-              className="font-heading text-8xl font-medium text-foreground/[0.06] select-none"
+              className="font-heading text-8xl font-medium text-[#f3eee0]/[0.08] select-none"
             >
               02
             </span>
-            <h2 className="font-heading text-2xl font-medium text-foreground">
+            <span className="text-xs font-medium tracking-[0.2em] text-[var(--amber-glow)] uppercase">
+              Who runs it
+            </span>
+            <h2 className="font-heading text-2xl font-medium text-[#f3eee0] sm:text-3xl">
               The engineer
             </h2>
-            <p className="max-w-sm text-sm leading-relaxed text-muted-foreground">
+            <p className="max-w-sm text-sm leading-relaxed text-[#f3eee0]/70">
               Every session is run hands-on, from levels to final mix — the same person
               who sets up your session is the one shaping how it sounds by the time you
               leave with it.
