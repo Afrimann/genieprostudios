@@ -1,0 +1,44 @@
+name: Reconcile pending payments
+
+# Pings app/api/cron/reconcile-payments on a tight schedule — the safety net
+# for a Paystack webhook that's dropped/delayed and never reconciled by a
+# customer's own confirmation-page poll (see payment-service.ts's
+# runPaymentReconciliationSweep() for the full incident writeup).
+#
+# This lives here instead of in vercel.json because Vercel's Hobby plan caps
+# Cron Jobs at once-per-day — not frequent enough to catch a dropped webhook
+# same-day. GitHub Actions' own schedule isn't subject to that limit, so this
+# calls the exact same route a Vercel Cron would, just via a plain
+# authenticated HTTP request instead.
+#
+# Required repo secrets (Settings -> Secrets and variables -> Actions):
+#   SITE_URL    — the deployed production URL (e.g. https://genieprostudios.vercel.app)
+#   CRON_SECRET — must match the CRON_SECRET env var set in the Vercel project
+#                 (same secret app/api/cron/daily-sweep/route.ts already uses)
+
+on:
+  schedule:
+    # Every 20 minutes. GitHub Actions cron timing is best-effort, not exact
+    # — fine here, since the route's own RECONCILIATION_GRACE_MINUTES (20)
+    # already tolerates a payment sitting pending slightly longer than that
+    # before it's checked.
+    - cron: "*/20 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call reconcile-payments endpoint
+        run: |
+          status=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.SITE_URL }}/api/cron/reconcile-payments")
+
+          echo "Response status: $status"
+          cat /tmp/response.json
+
+          if [ "$status" -ne 200 ]; then
+            echo "reconcile-payments returned a non-200 status"
+            exit 1
+          fi

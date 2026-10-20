@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Booking, BookingStatus } from "@/lib/services/booking-service";
 import { confirmPaymentByReference } from "@/lib/services/payment-confirmation-service";
+import { sendOwnerPaymentReconciledAfterCancellationEmail } from "@/lib/services/email-service";
 import { SITE_URL } from "@/lib/utils/site-url";
 
 // The three payment choices surfaced to the customer, per project-notes.md's
@@ -383,10 +384,65 @@ export async function getPaymentStatus(reference: string): Promise<PaymentStatus
  * to the authenticated customer's own payments (payments_select_own,
  * 0010_rls_policies.sql), so if that lookup can't see this reference, this
  * returns "not_found" without leaking whether the reference exists at all.
+ *
+ * This only covers the case where a customer is actively on the
+ * confirmation page right after paying. A customer who pays well outside
+ * that session (e.g. resuming a Paystack checkout left open from a previous
+ * day) has no session actively polling this — see
+ * reconcilePaymentWithPaystack() below for the server-side equivalent used
+ * by the reconciliation cron.
  */
 export async function verifyPaymentWithPaystack(reference: string): Promise<PaymentStatusResult> {
   const current = await getPaymentStatus(reference);
 
+  return reconcileAgainstPaystack(current, reference);
+}
+
+/**
+ * Cron-safe equivalent of verifyPaymentWithPaystack(), for
+ * app/api/cron/reconcile-payments/route.ts — a cron request has no
+ * authenticated customer session to scope an RLS lookup to, so this looks
+ * the payment row up directly via the service-role admin client instead of
+ * getPaymentStatus(), then applies the exact same verify-against-Paystack +
+ * confirm logic. This is the safety net for a webhook that's dropped or
+ * delayed long enough that no customer session is left around to trigger
+ * verifyPaymentWithPaystack() instead (the actual gap behind the 2026-10
+ * incident where a payment succeeded on Paystack a full day after the
+ * booking had already been auto-cancelled, and nothing ever reconciled it).
+ */
+export async function reconcilePaymentWithPaystack(reference: string): Promise<PaymentStatusResult> {
+  const admin = createAdminClient();
+
+  const { data, error } = await admin
+    .from("payments")
+    .select("status, booking_id")
+    .eq("paystack_reference", reference)
+    .maybeSingle();
+
+  if (error || !data) {
+    return { status: "not_found" };
+  }
+
+  const current: PaymentStatusResult = {
+    status: data.status as PaymentStatusResult["status"],
+    bookingId: data.booking_id,
+  };
+
+  return reconcileAgainstPaystack(current, reference);
+}
+
+/**
+ * Shared core of verifyPaymentWithPaystack()/reconcilePaymentWithPaystack():
+ * given the payment's current DB status (however it was looked up), checks
+ * Paystack if still pending and applies confirmPaymentByReference() on
+ * success. Pulled out so both the customer-session path and the cron path
+ * apply byte-for-byte identical reconciliation logic rather than risking the
+ * two drifting apart.
+ */
+async function reconcileAgainstPaystack(
+  current: PaymentStatusResult,
+  reference: string,
+): Promise<PaymentStatusResult> {
   if (current.status !== "pending") {
     // Already resolved (by the webhook, or a previous call to this
     // function) — nothing left to reconcile.
@@ -396,7 +452,7 @@ export async function verifyPaymentWithPaystack(reference: string): Promise<Paym
   const secret = process.env.PAYSTACK_SECRET_KEY;
 
   if (!secret) {
-    console.error("verifyPaymentWithPaystack: PAYSTACK_SECRET_KEY is not configured");
+    console.error("reconcileAgainstPaystack: PAYSTACK_SECRET_KEY is not configured");
     return current;
   }
 
@@ -408,7 +464,7 @@ export async function verifyPaymentWithPaystack(reference: string): Promise<Paym
       { headers: { Authorization: `Bearer ${secret}` } },
     );
   } catch (err) {
-    console.error("verifyPaymentWithPaystack: could not reach Paystack", err);
+    console.error("reconcileAgainstPaystack: could not reach Paystack", err);
     return current;
   }
 
@@ -436,7 +492,7 @@ export async function verifyPaymentWithPaystack(reference: string): Promise<Paym
       return { status: "success", bookingId: current.bookingId };
     }
 
-    console.error("verifyPaymentWithPaystack: failed to apply confirmed payment", reference, result);
+    console.error("reconcileAgainstPaystack: failed to apply confirmed payment", reference, result);
     return current;
   }
 
@@ -470,4 +526,129 @@ export async function verifyPaymentWithPaystack(reference: string): Promise<Paym
 
   // Still pending on Paystack's side (e.g. "ongoing", "queued").
   return current;
+}
+
+// How long a payment must have sat at status='pending' before the
+// reconciliation sweep will check it against Paystack — long enough that a
+// customer still actively completing checkout right now is never raced
+// (initializePayment -> Paystack redirect -> charge -> webhook is normally a
+// matter of seconds), short enough that a genuinely dropped webhook gets
+// caught the same day given the cron runs every 15-30 min (see
+// .github/workflows/reconcile-payments.yml).
+const RECONCILIATION_GRACE_MINUTES = 20;
+
+export type PaymentReconciliationSummary = {
+  processed: number;
+  reconciled: number;
+  stillPending: number;
+  markedFailed: number;
+  reactivatedCancelledBookings: number;
+};
+
+/**
+ * The server-side safety net missing before the 2026-10 incident: finds
+ * every payment stuck at status='pending' for longer than
+ * RECONCILIATION_GRACE_MINUTES and asks Paystack directly whether it ever
+ * actually succeeded, via the exact same reconcilePaymentWithPaystack() path
+ * a customer's own confirmation-page poll uses. Catches any payment whose
+ * webhook was dropped/delayed AND whose customer isn't around anymore to
+ * trigger the client-side fallback (e.g. she paid a day later, well outside
+ * that browser session — see this file's reconcilePaymentWithPaystack()
+ * JSDoc for the full incident writeup).
+ *
+ * Called only from app/api/cron/reconcile-payments/route.ts (service-role
+ * context, no user session) — deliberately its own route rather than a step
+ * in the once-daily sweep (app/api/cron/daily-sweep/route.ts), since Vercel's
+ * Hobby plan caps crons at once-per-day and this needs a much tighter
+ * cadence to be useful; see .github/workflows/reconcile-payments.yml for how
+ * it's actually invoked on a schedule without needing Vercel Pro.
+ */
+export async function runPaymentReconciliationSweep(): Promise<PaymentReconciliationSummary> {
+  const admin = createAdminClient();
+  const cutoff = new Date(Date.now() - RECONCILIATION_GRACE_MINUTES * 60 * 1000).toISOString();
+
+  const { data: stalePayments, error } = await admin
+    .from("payments")
+    .select("paystack_reference, booking_id, bookings(status)")
+    .eq("status", "pending")
+    .lt("created_at", cutoff);
+
+  if (error) {
+    console.error("runPaymentReconciliationSweep: failed to fetch stale pending payments", error.message);
+    return { processed: 0, reconciled: 0, stillPending: 0, markedFailed: 0, reactivatedCancelledBookings: 0 };
+  }
+
+  const rows = stalePayments ?? [];
+
+  let reconciled = 0;
+  let stillPending = 0;
+  let markedFailed = 0;
+  let reactivatedCancelledBookings = 0;
+
+  const ownerEmail = process.env.OWNER_NOTIFICATION_EMAIL;
+
+  for (const row of rows) {
+    const reference = row.paystack_reference;
+
+    if (!reference) {
+      // Shouldn't happen — initializePayment() always sets this at insert
+      // time — but the column is nullable in the schema, so guard rather
+      // than crash the whole sweep over one malformed row.
+      continue;
+    }
+
+    // Captured BEFORE reconciling: confirmPaymentByReference() may update
+    // this same booking's status as a side effect of a successful
+    // reconciliation below, so this has to be read first to know what it
+    // was cancelled TO, not what it becomes after. The embedded `bookings`
+    // relation types as an array here (no generated DB types in this
+    // project to tell the client it's a to-one join), even though PostgREST
+    // always returns a single object for this booking_id -> bookings.id
+    // foreign key at runtime — normalize both shapes defensively.
+    const bookingsField = row.bookings as unknown as { status: BookingStatus } | { status: BookingStatus }[] | null;
+    const bookingStatusBefore = Array.isArray(bookingsField)
+      ? (bookingsField[0]?.status ?? null)
+      : (bookingsField?.status ?? null);
+
+    try {
+      const result = await reconcilePaymentWithPaystack(reference);
+
+      if (result.status === "success") {
+        reconciled += 1;
+
+        const wasCancelled = bookingStatusBefore === "cancelled" || bookingStatusBefore === "auto_cancelled";
+
+        if (wasCancelled && result.bookingId) {
+          if (!ownerEmail) {
+            console.warn(
+              `runPaymentReconciliationSweep: booking ${result.bookingId} was reactivated from ${bookingStatusBefore} by a late payment, but OWNER_NOTIFICATION_EMAIL is not configured — no alert sent`,
+            );
+          } else {
+            const alertResult = await sendOwnerPaymentReconciledAfterCancellationEmail({
+              ownerEmail,
+              bookingUrl: `${SITE_URL}/admin/bookings/${result.bookingId}`,
+            });
+
+            if (alertResult.success) {
+              reactivatedCancelledBookings += 1;
+            } else {
+              console.error(
+                `runPaymentReconciliationSweep: failed to alert owner for reactivated booking ${result.bookingId}: ${alertResult.message}`,
+              );
+            }
+          }
+        }
+      } else if (result.status === "failed") {
+        markedFailed += 1;
+      } else {
+        stillPending += 1;
+      }
+    } catch (err) {
+      // Never let one bad reference abort the sweep for the rest.
+      console.error(`runPaymentReconciliationSweep: unexpected error reconciling ${reference}`, err);
+      stillPending += 1;
+    }
+  }
+
+  return { processed: rows.length, reconciled, stillPending, markedFailed, reactivatedCancelledBookings };
 }

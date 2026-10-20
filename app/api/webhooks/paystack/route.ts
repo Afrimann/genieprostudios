@@ -62,6 +62,13 @@ export async function POST(request: Request): Promise<Response> {
     signatureBuf.length !== expectedBuf.length ||
     !timingSafeEqual(signatureBuf, expectedBuf)
   ) {
+    // Previously silent — a 2026-10 incident where a payment's webhook never
+    // landed turned out to be caused by proxy.ts (see that file), not this,
+    // but tracing that down was needlessly hard with zero log trail for any
+    // rejected webhook. Logged, not failed differently: still a 401, Paystack
+    // doesn't retry on 401 the way it does on 5xx, which is correct here —
+    // a bad signature isn't fixed by a retry with the same payload.
+    console.error("paystack webhook: signature mismatch, rejecting request");
     return new Response(null, { status: 401 });
   }
 
