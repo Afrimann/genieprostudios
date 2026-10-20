@@ -12,7 +12,7 @@ import {
   type TriumphProjectRequestInput,
 } from "@/lib/validation/triumph-project";
 import { submitProjectRequestAction } from "@/lib/services/triumph-actions";
-import { TRIUMPH_PRICING_TIERS } from "@/lib/data/triumph-pricing";
+import type { TriumphPackage } from "@/lib/repositories/triumph-package-repository";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,7 +54,10 @@ const trustItem = {
   show: { opacity: 1, x: 0, transition: { duration: 0.4, ease: "easeOut" as const } },
 };
 
-export function TriumphStartProjectForm() {
+// `packages` comes from the server (see start-project-section.tsx) — the
+// same triumph_packages rows the pricing section renders, so the dropdown
+// never drifts out of sync with what's actually on offer.
+export function TriumphStartProjectForm({ packages }: { packages: TriumphPackage[] }) {
   const [projectCode, setProjectCode] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -231,9 +234,9 @@ export function TriumphStartProjectForm() {
                 <option value="" disabled>
                   Select a service
                 </option>
-                {TRIUMPH_PRICING_TIERS.map((tier) => (
-                  <option key={tier.id} value={tier.id}>
-                    {tier.name}
+                {packages.map((pkg) => (
+                  <option key={pkg.id} value={pkg.slug}>
+                    {pkg.name}
                   </option>
                 ))}
               </select>

@@ -4,7 +4,10 @@ import {
   getTriumphProjectForAdmin,
   getTriumphProjectUpdatesForAdmin,
 } from "@/lib/repositories/triumph-admin-repository";
-import { TRIUMPH_PRICING_TIERS } from "@/lib/data/triumph-pricing";
+import {
+  getAllTriumphPackages,
+  packageLabelForSlug,
+} from "@/lib/repositories/triumph-package-repository";
 import { TRIUMPH_PROJECT_STATUS_LABELS, type TriumphProjectStatus } from "@/lib/validation/triumph-update";
 import { ProjectUpdateForm } from "@/components/triumph-admin/project-update-form";
 import { PaymentStatusToggle } from "@/components/triumph-admin/payment-status-toggle";
@@ -38,9 +41,11 @@ export default async function TriumphAdminProjectDetailPage({
     notFound();
   }
 
-  const updates = await getTriumphProjectUpdatesForAdmin(id);
-  const serviceLabel =
-    TRIUMPH_PRICING_TIERS.find((tier) => tier.id === project.service_id)?.name ?? project.service_id;
+  const [updates, packages] = await Promise.all([
+    getTriumphProjectUpdatesForAdmin(id),
+    getAllTriumphPackages(),
+  ]);
+  const serviceLabel = packageLabelForSlug(packages, project.service_id);
 
   return (
     <div className="flex flex-col gap-8 p-6 sm:p-8">

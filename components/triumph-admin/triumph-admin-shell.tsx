@@ -2,7 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { LayoutDashboard, LogOut, Music4, Wallet } from "lucide-react";
+import { LayoutDashboard, LogOut, Music4, Tag, Wallet } from "lucide-react";
 
 import { signOut } from "@/lib/services/auth-service";
 
@@ -20,6 +20,7 @@ import { signOut } from "@/lib/services/auth-service";
 // still reads as meaningful rather than decorative.
 const NAV_ITEMS = [
   { href: "/triumph-admin", label: "Projects", icon: LayoutDashboard },
+  { href: "/triumph-admin/packages", label: "Packages", icon: Tag },
   { href: "/triumph-admin/revenue", label: "Revenue", icon: Wallet },
 ] as const;
 

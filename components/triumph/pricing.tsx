@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 
 import { Reveal } from "@/components/ui/reveal";
 import { CountUp } from "@/components/home/count-up";
-import { TRIUMPH_PRICING_TIERS } from "@/lib/data/triumph-pricing";
+import type { TriumphPackage } from "@/lib/repositories/triumph-package-repository";
 import { BrandGlow } from "@/components/triumph/brand-glow";
 
 // Cycling tilt per card — the same "photos pinned to a corkboard" trick as
@@ -39,7 +39,14 @@ const item = {
   },
 };
 
-export function TriumphPricing() {
+// Tiers are now owner-managed via /triumph-admin/packages
+// (triumph_packages table, 0041_triumph_packages.sql) instead of the old
+// static TRIUMPH_PRICING_TIERS array — the page server-fetches them and
+// passes them in here, since this component stays a Client Component for
+// its scroll-triggered animations.
+export function TriumphPricing({ tiers }: { tiers: TriumphPackage[] }) {
+  if (tiers.length === 0) return null;
+
   return (
     <section id="pricing" className="relative scroll-mt-16 overflow-hidden border-b border-border bg-card">
       <BrandGlow variant="center" />
@@ -60,7 +67,7 @@ export function TriumphPricing() {
           viewport={{ once: true, margin: "-80px 0px" }}
           className="grid grid-cols-1 gap-6 py-4 sm:grid-cols-2 lg:grid-cols-5"
         >
-          {TRIUMPH_PRICING_TIERS.map((tier, i) => (
+          {tiers.map((tier, i) => (
             <motion.div
               key={tier.id}
               variants={item}
@@ -96,7 +103,7 @@ export function TriumphPricing() {
 
               <h3 className="font-heading text-lg font-medium text-foreground">{tier.name}</h3>
               <p className="font-heading text-2xl font-medium text-foreground">
-                <CountUp to={tier.priceValue} prefix="$" durationSeconds={1.2} />
+                <CountUp to={tier.price_usd} prefix="$" durationSeconds={1.2} />
                 <span className="text-sm font-normal text-muted-foreground">{tier.unit}</span>
               </p>
               <p className="text-sm leading-relaxed text-muted-foreground">{tier.description}</p>
