@@ -32,6 +32,20 @@ export async function proxy(request: NextRequest) {
   return response;
 }
 
+// Excludes /api/* in addition to the usual static-asset exclusions — nothing
+// under app/api/ reads the Supabase session cookie (they're all
+// service-role/admin-client or externally-authenticated, e.g. the Paystack
+// webhook's signature check and the cron routes' CRON_SECRET bearer token),
+// so running this on them was pure unnecessary overhead: an un-guarded
+// supabase.auth.getUser() network call ahead of every API request, including
+// Paystack's webhook POST. If that Supabase call is ever slow or errors, it
+// could throw before the request reaches the route handler at all — a
+// silent failure with zero application-level logging, since our code never
+// runs. Confirmed as the likely cause of a 2026-10 incident where a
+// Paystack webhook never landed (root-cause investigation, see
+// app/api/webhooks/paystack/route.ts).
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+  ],
 };

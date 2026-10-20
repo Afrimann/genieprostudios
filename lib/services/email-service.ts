@@ -409,6 +409,48 @@ export async function sendAutoCancelOwnerEmail(params: {
 }
 
 /**
+ * Owner-only alert fired from the payment reconciliation sweep
+ * (payment-service.ts's runPaymentReconciliationSweep(), called from
+ * app/api/cron/reconcile-payments/route.ts) specifically when a payment is
+ * confirmed successful on Paystack for a booking that had ALREADY been
+ * cancelled/auto_cancelled by the time the payment reconciled — i.e. a slot
+ * the owner may have believed was free came back to life. This is on top
+ * of (not instead of) the normal booking-confirmed email the customer and
+ * owner get from confirmPaymentByReference() — this one exists so the owner
+ * specifically knows to double-check that slot wasn't given to anyone else
+ * in the meantime, which the normal "new booking" email has no reason to
+ * mention.
+ */
+export async function sendOwnerPaymentReconciledAfterCancellationEmail(params: {
+  ownerEmail: string;
+  bookingUrl: string;
+}): Promise<SendEmailResult> {
+  const { ownerEmail, bookingUrl } = params;
+
+  const brand = GENIE_PRO_BRAND;
+  const bodyHtml =
+    eyebrow("Needs a look", brand) +
+    heading("A cancelled booking just got paid for", brand) +
+    paragraph(
+      "A payment was just confirmed on Paystack for a booking that had already been " +
+        "cancelled (the customer paid later than our system expected, and the webhook " +
+        "for it didn't land in time). The booking has been automatically reactivated " +
+        "with the payment applied — please double-check that time slot wasn't given " +
+        "to anyone else in the meantime.",
+    ) +
+    ctaButton(bookingUrl, "View this booking", brand);
+
+  return sendEmail({
+    to: ownerEmail,
+    subject: "A cancelled booking just got paid for — please check for conflicts",
+    html: renderEmailLayout(brand, {
+      previewText: "A previously cancelled booking was reactivated by a late payment.",
+      bodyHtml,
+    }),
+  });
+}
+
+/**
  * Owner notification fired from support-service.ts's sendTicketMessage()
  * whenever a CUSTOMER sends a message on their front-desk ticket (never for
  * an admin's own reply) — best-effort, same as every other email here.

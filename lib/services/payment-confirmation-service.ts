@@ -118,8 +118,20 @@ export async function confirmPaymentByReference(
   // keeps "booking confirmed" from firing on a technicality where nothing
   // actually confirmed, and keeps newStatus's type narrowed to
   // "deposited" | "paid_in_full" below with no unsafe cast needed.
+  //
+  // Includes 'cancelled'/'auto_cancelled' as a "first payment" starting
+  // point, not just 'pending_deposit' — a payment can land here with the
+  // booking already cancelled (the stale-pending sweep ran before a slow
+  // customer finished paying, then the webhook/reconciliation confirms the
+  // charge afterward; see payment-service.ts's reconcilePaymentWithPaystack
+  // JSDoc for the full incident this fixes). Before this, that reactivation
+  // path sent NO confirmation to the customer at all — she'd have a
+  // confirmed, paid booking and no email ever telling her so.
   const wasFirstPayment =
-    booking.status === "pending_deposit" && (newStatus === "deposited" || newStatus === "paid_in_full");
+    (booking.status === "pending_deposit" ||
+      booking.status === "cancelled" ||
+      booking.status === "auto_cancelled") &&
+    (newStatus === "deposited" || newStatus === "paid_in_full");
   const wasBalancePayment = booking.status === "deposited" && newStatus === "paid_in_full";
 
   // Notifications, best-effort — never allowed to change the outcome
