@@ -12,9 +12,13 @@ name: Reconcile pending payments
 # authenticated HTTP request instead.
 #
 # Required repo secrets (Settings -> Secrets and variables -> Actions):
-#   SITE_URL    — the deployed production URL (e.g. https://genieprostudios.vercel.app)
-#   CRON_SECRET — must match the CRON_SECRET env var set in the Vercel project
-#                 (same secret app/api/cron/daily-sweep/route.ts already uses)
+#   NEXT_PUBLIC_SITE_URL — the deployed production URL (e.g.
+#                          https://genieprostudios.vercel.app), same name as
+#                          the Vercel env var (lib/utils/site-url.ts) so
+#                          there's one value to keep in sync, not two.
+#   CRON_SECRET          — must match the CRON_SECRET env var set in the
+#                          Vercel project (same secret
+#                          app/api/cron/daily-sweep/route.ts already uses)
 
 on:
   schedule:
@@ -33,7 +37,7 @@ jobs:
         run: |
           status=$(curl -s -o /tmp/response.json -w "%{http_code}" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.SITE_URL }}/api/cron/reconcile-payments")
+            "${{ secrets.NEXT_PUBLIC_SITE_URL }}/api/cron/reconcile-payments")
 
           echo "Response status: $status"
           cat /tmp/response.json
