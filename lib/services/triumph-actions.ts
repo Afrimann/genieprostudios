@@ -9,7 +9,7 @@
 // Action boundary.
 
 import { triumphProjectRequestSchema } from "@/lib/validation/triumph-project";
-import { TRIUMPH_PRICING_TIERS } from "@/lib/data/triumph-pricing";
+import { getActiveTriumphPackages } from "@/lib/repositories/triumph-package-repository";
 import { createTriumphProject } from "@/lib/repositories/triumph-projects-repository";
 import {
   sendOwnerNewProjectRequestEmail,
@@ -37,7 +37,17 @@ export async function submitProjectRequestAction(input: unknown): Promise<Submit
     return { success: false, message: RATE_LIMITED_MESSAGE };
   }
 
-  const serviceLabel = TRIUMPH_PRICING_TIERS.find((tier) => tier.id === serviceId)?.name ?? serviceId;
+  // Re-validate serviceId against the live package list — the client form's
+  // <select> is populated from the same table, but packages can be hidden
+  // or deleted by the time this submission lands.
+  const activePackages = await getActiveTriumphPackages();
+  const selectedPackage = activePackages.find((pkg) => pkg.slug === serviceId);
+
+  if (!selectedPackage) {
+    return { success: false, message: "Please select a valid service and try again." };
+  }
+
+  const serviceLabel = selectedPackage.name;
 
   let projectCode: string;
 

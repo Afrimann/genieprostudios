@@ -5,7 +5,10 @@ import {
   listTriumphProjectsForAdmin,
   getTriumphProjectStatusCounts,
 } from "@/lib/repositories/triumph-admin-repository";
-import { TRIUMPH_PRICING_TIERS } from "@/lib/data/triumph-pricing";
+import {
+  getAllTriumphPackages,
+  packageLabelForSlug,
+} from "@/lib/repositories/triumph-package-repository";
 import { TRIUMPH_PROJECT_STATUS_LABELS, type TriumphProjectStatus } from "@/lib/validation/triumph-update";
 import { TRIUMPH_PAYMENT_STATUS_LABELS } from "@/lib/validation/triumph-payment";
 import { RealtimeRefresher } from "@/components/admin/realtime-refresher";
@@ -30,9 +33,10 @@ const STATUS_DOT_CLASS: Record<TriumphProjectStatus, string> = {
 };
 
 export default async function TriumphAdminDashboardPage() {
-  const [projects, counts] = await Promise.all([
+  const [projects, counts, packages] = await Promise.all([
     listTriumphProjectsForAdmin(),
     getTriumphProjectStatusCounts(),
+    getAllTriumphPackages(),
   ]);
 
   // Default view: newest-first, active projects only — completed/cancelled
@@ -65,8 +69,7 @@ export default async function TriumphAdminDashboardPage() {
           <p className="p-6 text-sm text-muted-foreground">No active projects right now.</p>
         ) : (
           activeProjects.map((project) => {
-            const serviceLabel =
-              TRIUMPH_PRICING_TIERS.find((tier) => tier.id === project.service_id)?.name ?? project.service_id;
+            const serviceLabel = packageLabelForSlug(packages, project.service_id);
 
             return (
               <Link

@@ -11,7 +11,10 @@ import {
   getTriumphProjectById,
   getTriumphProjectUpdates,
 } from "@/lib/repositories/triumph-projects-repository";
-import { TRIUMPH_PRICING_TIERS } from "@/lib/data/triumph-pricing";
+import {
+  getActiveTriumphPackages,
+  packageLabelForSlug,
+} from "@/lib/repositories/triumph-package-repository";
 import { ProjectStatusTimeline } from "@/components/triumph/project-status-timeline";
 import { TrackLookupForm } from "@/components/triumph/track-lookup-form";
 import { ExitProjectButton } from "@/components/triumph/exit-project-button";
@@ -85,9 +88,11 @@ export default async function TriumphTrackCodePage({
   const verifiedProjectId = verifyTrackingCookie(verifiedCookieValue);
   const isVerified = verifiedProjectId === project.id;
 
-  const updates = await getTriumphProjectUpdates(project.id);
-  const serviceLabel =
-    TRIUMPH_PRICING_TIERS.find((tier) => tier.id === project.service_id)?.name ?? project.service_id;
+  const [updates, packages] = await Promise.all([
+    getTriumphProjectUpdates(project.id),
+    getActiveTriumphPackages(),
+  ]);
+  const serviceLabel = packageLabelForSlug(packages, project.service_id);
 
   return (
     <section className="bg-grain relative overflow-hidden border-b border-border bg-card">

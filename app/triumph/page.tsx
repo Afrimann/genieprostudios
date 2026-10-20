@@ -8,10 +8,10 @@ import { TriumphMarquee } from "@/components/triumph/marquee";
 import { TriumphArtists } from "@/components/triumph/artists";
 import { TriumphWhy } from "@/components/triumph/why-triumph";
 import { TriumphPortfolioTeaser } from "@/components/triumph/portfolio-teaser";
-import { TriumphPricing } from "@/components/triumph/pricing";
+import { TriumphPricingSection } from "@/components/triumph/pricing-section";
 import { TriumphTestimonials } from "@/components/triumph/testimonials";
 import { TriumphBio } from "@/components/triumph/bio";
-import { TriumphStartProjectForm } from "@/components/triumph/start-project-form";
+import { TriumphStartProjectSection } from "@/components/triumph/start-project-section";
 
 // Distinct scope from the main GenieProStudios site (different business,
 // different audience — see components/triumph/hero.tsx and pricing.tsx for
@@ -86,6 +86,30 @@ function PortfolioFallback() {
   );
 }
 
+// TriumphPricingSection also reads Supabase (via cookies()) — same
+// Suspense-boundary reasoning as PortfolioFallback above.
+function PricingFallback() {
+  return (
+    <section className="border-b border-border bg-card">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-24">
+        <p className="text-sm text-muted-foreground">Loading pricing…</p>
+      </div>
+    </section>
+  );
+}
+
+// TriumphStartProjectSection also reads Supabase (via cookies(), to
+// populate its service dropdown) — same Suspense-boundary reasoning.
+function StartProjectFallback() {
+  return (
+    <section className="border-b border-border bg-card">
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-6 py-24">
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      </div>
+    </section>
+  );
+}
+
 export default function TriumphPage() {
   return (
     <main className="flex flex-col">
@@ -98,13 +122,17 @@ export default function TriumphPage() {
       <TriumphArtists />
       <TriumphMarquee />
       <TriumphWhy />
-      <TriumphPricing />
+      <Suspense fallback={<PricingFallback />}>
+        <TriumphPricingSection />
+      </Suspense>
       <Suspense fallback={<PortfolioFallback />}>
         <TriumphPortfolioTeaser />
       </Suspense>
       <TriumphTestimonials />
       <TriumphBio />
-      <TriumphStartProjectForm />
+      <Suspense fallback={<StartProjectFallback />}>
+        <TriumphStartProjectSection />
+      </Suspense>
     </main>
   );
 }
