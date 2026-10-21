@@ -83,6 +83,13 @@ export function useBookingFlow(initialServiceId?: string) {
 
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
+  // Free-text "anything specific we should know" box — collected before the
+  // booking row is created (selectStartTime/submitAddonSongs below) and
+  // passed straight into book_session/create_addon_booking's p_notes
+  // (0042_booking_notes.sql), since customers have no UPDATE policy on
+  // bookings to set it afterward.
+  const [notes, setNotes] = useState("");
+
   const [startTimeOptions, setStartTimeOptions] = useState<StartTimeOption[]>([]);
   const [startTimesLoading, setStartTimesLoading] = useState(false);
   const [startTimesError, setStartTimesError] = useState<string | null>(null);
@@ -175,6 +182,7 @@ export function useBookingFlow(initialServiceId?: string) {
           songs.length,
           contactName,
           contactEmail,
+          notes,
         );
 
         if (!result.success) {
@@ -268,7 +276,7 @@ export function useBookingFlow(initialServiceId?: string) {
       setBookingSubmitting(false);
       setStep("summary");
     },
-    [selectedService, addonBookingId, addonCustomerId, songStatuses, songErrorMessages],
+    [selectedService, addonBookingId, addonCustomerId, songStatuses, songErrorMessages, notes],
   );
 
   // Load services once on mount.
@@ -364,6 +372,8 @@ export function useBookingFlow(initialServiceId?: string) {
     setAddonCustomerId(null);
     setSongStatuses([]);
     setSongErrorMessages([]);
+
+    setNotes("");
   }
 
   function backToDate() {
@@ -393,6 +403,7 @@ export function useBookingFlow(initialServiceId?: string) {
       selectedDate,
       selectedService.id,
       option.startTime,
+      notes,
     );
     setBookingSubmitting(false);
 
@@ -429,6 +440,9 @@ export function useBookingFlow(initialServiceId?: string) {
     selectedDate,
     selectDate,
     backToService,
+
+    notes,
+    setNotes,
 
     startTimeOptions,
     startTimesLoading,

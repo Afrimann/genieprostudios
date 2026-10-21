@@ -30,6 +30,10 @@ export type Booking = {
   // which already has the customer's profile. See 0020_addon_song_details.sql.
   contact_name: string | null;
   contact_email: string | null;
+  // Free-text specifics the customer typed in during booking (see
+  // 0042_booking_notes.sql) — optional, set once at creation. Null if the
+  // customer left it blank.
+  notes: string | null;
   total_price_kobo: number;
   deposit_amount_kobo: number;
   amount_paid_kobo: number;
@@ -106,6 +110,7 @@ export async function createPendingBooking(
   date: string,
   serviceId: string,
   startTime: string,
+  notes?: string,
 ): Promise<CreatePendingBookingResult> {
   const supabase = await createClient();
 
@@ -113,6 +118,7 @@ export async function createPendingBooking(
     p_service_id: serviceId,
     p_date: date,
     p_start_time: startTime,
+    p_notes: notes ?? null,
   });
 
   if (error) {
@@ -147,6 +153,7 @@ export async function createAddonBooking(
   songCount: number,
   contactName: string,
   contactEmail: string,
+  notes?: string,
 ): Promise<CreatePendingBookingResult> {
   const supabase = await createClient();
 
@@ -155,6 +162,7 @@ export async function createAddonBooking(
     p_song_count: songCount,
     p_contact_name: contactName,
     p_contact_email: contactEmail,
+    p_notes: notes ?? null,
   });
 
   if (error) {

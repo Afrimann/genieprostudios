@@ -177,6 +177,12 @@ async function BookingDetail({ id }: { id: string }) {
         </DetailCard>
       </div>
 
+      {booking.notes && (
+        <DetailCard title="Customer notes">
+          <p className="text-sm whitespace-pre-wrap text-foreground">{booking.notes}</p>
+        </DetailCard>
+      )}
+
       {booking.tracks.length > 0 && (
         <DetailCard title="Songs">
           {(booking.contactName || booking.contactEmail) && (

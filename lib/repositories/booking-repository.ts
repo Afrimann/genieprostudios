@@ -151,6 +151,9 @@ export type CustomerBookingDetail = {
   // Only ever populated for an is_addon booking (see booking_tracks,
   // 0020_addon_song_details.sql) — empty for a room booking.
   tracks: { title: string }[];
+  // Free-text specifics the customer typed in during booking (see
+  // 0042_booking_notes.sql) — optional, null if left blank.
+  notes: string | null;
 };
 
 /**
@@ -185,6 +188,7 @@ export async function getBookingDetailForCustomer(
         total_price_kobo,
         deposit_amount_kobo,
         amount_paid_kobo,
+        notes,
         services ( label, duration_hours, is_addon )
       `,
     )
@@ -240,6 +244,7 @@ export async function getBookingDetailForCustomer(
       createdAt: p.created_at,
     })),
     tracks: tracks.map((t) => ({ title: t.title })),
+    notes: booking.notes,
   };
 }
 

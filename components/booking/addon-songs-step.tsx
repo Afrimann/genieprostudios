@@ -15,6 +15,7 @@ import { formatKobo } from "@/lib/utils/money";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 const STATUS_LABEL: Record<SongUploadStatus, string> = {
   idle: "",
@@ -36,6 +37,11 @@ interface AddonSongsStepProps {
     songs: { title: string; file: File }[],
   ) => void;
   onBack: () => void;
+  // "Anything specific we should know?" free-text box (0042_booking_notes.sql)
+  // — owned by useBookingFlow, not this form, since it's read directly off
+  // the hook by submitAddonSongs rather than passed through onSubmit.
+  notes: string;
+  onNotesChange: (value: string) => void;
 }
 
 /**
@@ -55,6 +61,8 @@ export function AddonSongsStep({
   songErrorMessages,
   onSubmit,
   onBack,
+  notes,
+  onNotesChange,
 }: AddonSongsStepProps) {
   const {
     control,
@@ -126,6 +134,20 @@ export function AddonSongsStep({
                 <p className="text-sm text-destructive">{errors.contactEmail.message}</p>
               )}
             </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="addon-notes">
+              Anything specific we should know?{" "}
+              <span className="font-normal text-muted-foreground">(optional)</span>
+            </Label>
+            <Textarea
+              id="addon-notes"
+              placeholder="e.g. reference tracks to match, specific loudness target…"
+              value={notes}
+              onChange={(e) => onNotesChange(e.target.value)}
+              disabled={submissionStarted}
+              rows={3}
+            />
           </div>
         </div>
 

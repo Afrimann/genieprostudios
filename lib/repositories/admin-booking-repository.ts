@@ -260,6 +260,9 @@ export type AdminBookingDetail = {
   // booking. See booking.contact_name/booking_tracks, 0020_addon_song_details.sql.
   contactName: string | null;
   contactEmail: string | null;
+  // Free-text specifics the customer typed in during booking (see
+  // 0042_booking_notes.sql) — optional, null if left blank.
+  notes: string | null;
   tracks: { id: string; title: string; fileName: string; filePath: string }[];
   payments: {
     id: string;
@@ -374,6 +377,7 @@ export async function getBookingDetailForAdmin(bookingId: string): Promise<Admin
         },
     contactName: booking.contact_name,
     contactEmail: booking.contact_email,
+    notes: booking.notes,
     tracks: tracks.map((t) => ({
       id: t.id,
       title: t.title,

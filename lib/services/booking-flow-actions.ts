@@ -66,8 +66,9 @@ export async function createPendingBooking(
   date: string,
   serviceId: string,
   startTime: string,
+  notes?: string,
 ): Promise<CreatePendingBookingResult> {
-  return createPendingBookingService(date, serviceId, startTime);
+  return createPendingBookingService(date, serviceId, startTime, notes);
 }
 
 /** Thin passthrough — same convention as createPendingBooking above, for
@@ -81,8 +82,9 @@ export async function createAddonBooking(
   songCount: number,
   contactName: string,
   contactEmail: string,
+  notes?: string,
 ): Promise<CreatePendingBookingResult> {
-  return createAddonBookingService(serviceId, songCount, contactName, contactEmail);
+  return createAddonBookingService(serviceId, songCount, contactName, contactEmail, notes);
 }
 
 export type SaveBookingTrackResult =
