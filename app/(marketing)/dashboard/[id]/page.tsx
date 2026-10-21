@@ -175,6 +175,12 @@ async function BookingDetail({ id }: { id: string }) {
         </DetailCard>
       )}
 
+      {booking.notes && (
+        <DetailCard title="Your notes">
+          <p className="text-sm whitespace-pre-wrap text-foreground">{booking.notes}</p>
+        </DetailCard>
+      )}
+
       <DetailCard title="Payment history">
         {booking.payments.length === 0 && (
           <p className="text-sm text-muted-foreground">No payment attempts recorded yet.</p>

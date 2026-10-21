@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { PackageCard } from "@/components/booking/package-card";
 import { AddonSongsStep } from "@/components/booking/addon-songs-step";
 import { CancelBookingButton } from "@/components/dashboard/cancel-booking-button";
@@ -308,6 +309,8 @@ export function BookingFlow({ initialServiceId }: BookingFlowProps) {
             songErrorMessages={flow.songErrorMessages}
             onSubmit={flow.submitAddonSongs}
             onBack={flow.backToService}
+            notes={flow.notes}
+            onNotesChange={flow.setNotes}
           />
         </StepLayout>
       )}
@@ -400,6 +403,24 @@ export function BookingFlow({ initialServiceId }: BookingFlowProps) {
               })}
             </div>
           )}
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="booking-notes">
+              Anything specific we should know?{" "}
+              <span className="font-normal text-muted-foreground">(optional)</span>
+            </Label>
+            <Textarea
+              id="booking-notes"
+              placeholder="e.g. extra vocal mic needed, running a few minutes late, specific genre references…"
+              value={flow.notes}
+              onChange={(e) => flow.setNotes(e.target.value)}
+              disabled={flow.bookingSubmitting}
+              rows={3}
+            />
+            <p className="text-xs text-muted-foreground">
+              Pick your start time below to confirm — this note is saved along with it.
+            </p>
+          </div>
 
           <Button
             variant="outline"
