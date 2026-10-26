@@ -5,9 +5,11 @@ import Link from "next/link";
 import { getActiveServices, type Service } from "@/lib/repositories/service-repository";
 import { formatKobo } from "@/lib/utils/money";
 import { CATEGORY_LABELS, CATEGORY_BLURBS, CATEGORY_ORDER } from "@/lib/data/service-categories";
+import { PACKAGE_GROUPS } from "@/lib/content/package-details";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/ui/reveal";
 import { TriumphTeaser } from "@/components/home/triumph-teaser";
+import { Check, X } from "lucide-react";
 
 // Public marketing page — static shell + dynamic data via Suspense, per
 // AGENTS.md fix #2 (mirrors app/sign-up/page.tsx). No instant=false here:
@@ -36,7 +38,17 @@ function groupByCategory(services: Service[]): Map<string, Service[]> {
 // a continuation of that teaser rather than a visually different page.
 const BAR_HEIGHTS = [10, 16, 12, 20, 14];
 
+function getPackageFeatures(service: Service) {
+  return PACKAGE_GROUPS.find((group) =>
+    group.matchLabel
+      ? group.matchLabel === service.label
+      : group.categories?.includes(service.category),
+  )?.features;
+}
+
 function ServiceCard({ service }: { service: Service }) {
+  const features = getPackageFeatures(service);
+
   return (
     <div className="group flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 transition-all duration-300 hover:-translate-y-1 hover:border-[var(--amber-glow)]/60 hover:shadow-[0_12px_32px_rgba(0,0,0,0.25)]">
       <div className="flex items-end gap-1" aria-hidden="true">
@@ -61,6 +73,27 @@ function ServiceCard({ service }: { service: Service }) {
       <p className="font-heading text-2xl font-medium text-foreground">
         {formatKobo(service.price_kobo)}
       </p>
+
+      {features && (
+        <ul className="flex flex-col gap-1.5 border-t border-border pt-4">
+          {features.map((feature) => (
+            <li
+              key={feature.label}
+              className="flex items-start gap-2 text-xs text-muted-foreground"
+            >
+              {feature.included ? (
+                <Check
+                  className="mt-0.5 size-3.5 shrink-0 text-[var(--amber-glow)]"
+                  aria-hidden="true"
+                />
+              ) : (
+                <X className="mt-0.5 size-3.5 shrink-0 text-red-500" aria-hidden="true" />
+              )}
+              {feature.label}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="mt-auto pt-2">
         {service.is_addon ? (
