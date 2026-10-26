@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { createClient as createBrowserClient } from "@/lib/supabase/client";
-import type { Service } from "@/lib/repositories/service-repository";
+import type { Service, ServiceCatalog } from "@/lib/repositories/service-repository";
 import type { Booking } from "@/lib/services/booking-service";
 import type { StartTimeOption } from "@/lib/services/availability-service";
 import {
@@ -76,6 +76,7 @@ export function useBookingFlow(initialServiceId?: string) {
   const [step, setStep] = useState<BookingStep>("service");
 
   const [services, setServices] = useState<Service[]>([]);
+  const [catalog, setCatalog] = useState<ServiceCatalog>({ packages: [] });
   const [servicesLoading, setServicesLoading] = useState(true);
   const [servicesError, setServicesError] = useState<string | null>(null);
 
@@ -296,6 +297,7 @@ export function useBookingFlow(initialServiceId?: string) {
       }
 
       setServices(result.services);
+      setCatalog(result.catalog);
 
       if (initialServiceId) {
         const match = result.services.find((s) => s.id === initialServiceId);
@@ -428,6 +430,7 @@ export function useBookingFlow(initialServiceId?: string) {
     step,
 
     services,
+    catalog,
     servicesLoading,
     servicesError,
     selectedService,

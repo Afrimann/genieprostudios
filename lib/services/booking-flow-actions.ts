@@ -5,7 +5,11 @@
 // Supabase client (cookies()) so the Client Component-owned
 // lib/hooks/use-booking-flow.ts can call them directly.
 
-import { getActiveServices, type Service } from "@/lib/repositories/service-repository";
+import {
+  getServiceCatalog,
+  type Service,
+  type ServiceCatalog,
+} from "@/lib/repositories/service-repository";
 import { cancelOwnPendingBooking } from "@/lib/repositories/booking-repository";
 import {
   createBookingTrack,
@@ -22,13 +26,19 @@ import {
 } from "@/lib/services/availability-service";
 
 export type FetchServicesResult =
-  | { success: true; services: Service[] }
+  | { success: true; services: Service[]; catalog: ServiceCatalog }
   | { success: false; message: string };
 
 export async function fetchServices(): Promise<FetchServicesResult> {
   try {
-    const services = await getActiveServices();
-    return { success: true, services };
+    const catalog = await getServiceCatalog();
+    const services = catalog.packages
+      .flatMap((pkg) => pkg.categories)
+      .flatMap((category) => category.services)
+      .sort((a, b) =>
+        a.category.localeCompare(b.category) || a.duration_hours - b.duration_hours,
+      );
+    return { success: true, services, catalog };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to load services.";
     return { success: false, message };

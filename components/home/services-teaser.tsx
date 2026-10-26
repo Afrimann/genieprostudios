@@ -1,8 +1,7 @@
 import Link from "next/link";
 
-import { getActiveServices } from "@/lib/repositories/service-repository";
+import { getServiceCatalog } from "@/lib/repositories/service-repository";
 import { formatKobo } from "@/lib/utils/money";
-import { CATEGORY_LABELS } from "@/lib/data/service-categories";
 import { Reveal } from "@/components/ui/reveal";
 
 // Horizontal scroll-snap row of "rack units" — each category reads like a
@@ -11,20 +10,16 @@ import { Reveal } from "@/components/ui/reveal";
 // the cheapest line item per category as "from ₦X" — the full breakdown
 // stays on /services, this is a teaser.
 async function getCategorySummaries() {
-  const services = await getActiveServices();
-  const byCategory = new Map<string, number>();
-
-  for (const service of services) {
-    const current = byCategory.get(service.category);
-    if (current === undefined || service.price_kobo < current) {
-      byCategory.set(service.category, service.price_kobo);
-    }
-  }
-
-  return Array.from(byCategory.entries()).map(([category, fromKobo]) => ({
-    category,
-    fromKobo,
-  }));
+  const catalog = await getServiceCatalog();
+  return catalog.packages.flatMap((pkg) =>
+    pkg.categories
+      .filter((category) => category.active && category.services.length > 0)
+      .map((category) => ({
+        category: category.category,
+        label: category.label,
+        fromKobo: Math.min(...category.services.map((service) => service.price_kobo)),
+      })),
+  );
 }
 
 export async function ServicesTeaser() {
@@ -59,7 +54,7 @@ export async function ServicesTeaser() {
               </div>
               <div className="flex flex-col gap-1">
                 <p className="text-sm font-medium text-foreground">
-                  {CATEGORY_LABELS[entry.category] ?? entry.category}
+                  {entry.label}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   from {formatKobo(entry.fromKobo)}

@@ -2,10 +2,12 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { getActiveServices, type Service } from "@/lib/repositories/service-repository";
+import {
+  getServiceCatalog,
+  type Service,
+  type ServicePackageFeature,
+} from "@/lib/repositories/service-repository";
 import { formatKobo } from "@/lib/utils/money";
-import { CATEGORY_LABELS, CATEGORY_BLURBS, CATEGORY_ORDER } from "@/lib/data/service-categories";
-import { PACKAGE_GROUPS } from "@/lib/content/package-details";
 import { Button } from "@/components/ui/button";
 import { Reveal } from "@/components/ui/reveal";
 import { TriumphTeaser } from "@/components/home/triumph-teaser";
@@ -17,38 +19,18 @@ import { Check, X } from "lucide-react";
 // cookies), so a static shell around the dynamic services fetch is the
 // correct fit under cacheComponents.
 
-function groupByCategory(services: Service[]): Map<string, Service[]> {
-  const groups = new Map<string, Service[]>();
-
-  for (const category of CATEGORY_ORDER) {
-    groups.set(category, []);
-  }
-
-  for (const service of services) {
-    const bucket = groups.get(service.category) ?? [];
-    bucket.push(service);
-    groups.set(service.category, bucket);
-  }
-
-  return groups;
-}
-
 // Per-card mini VU-bar graphic — same "rack unit" motif as
 // components/home/services-teaser.tsx, so the full /services page reads as
 // a continuation of that teaser rather than a visually different page.
 const BAR_HEIGHTS = [10, 16, 12, 20, 14];
 
-function getPackageFeatures(service: Service) {
-  return PACKAGE_GROUPS.find((group) =>
-    group.matchLabel
-      ? group.matchLabel === service.label
-      : group.categories?.includes(service.category),
-  )?.features;
-}
-
-function ServiceCard({ service }: { service: Service }) {
-  const features = getPackageFeatures(service);
-
+function ServiceCard({
+  service,
+  features,
+}: {
+  service: Service;
+  features: ServicePackageFeature[];
+}) {
   return (
     <div className="group flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 transition-all duration-300 hover:-translate-y-1 hover:border-[var(--amber-glow)]/60 hover:shadow-[0_12px_32px_rgba(0,0,0,0.25)]">
       <div className="flex items-end gap-1" aria-hidden="true">
@@ -96,10 +78,9 @@ function ServiceCard({ service }: { service: Service }) {
       )}
 
       <div className="mt-auto pt-2">
-        {service.is_addon ? (
-          // No studio time required — this is Triumph Music Global's
-          // territory (remote mixing/mastering), not the room-booking flow,
-          // so send the request there instead of into /book.
+        {service.category === "post_production" && service.is_addon ? (
+          // Existing post-production rates are fulfilled remotely by Triumph
+          // Music Global rather than through a studio booking.
           <Button asChild className="w-full rounded-none bg-[#22e6c8] text-[#0b0712] hover:bg-[#1cc9ae]">
             <Link href="/triumph#start-project">Send a request to Triumph</Link>
           </Button>
@@ -117,11 +98,14 @@ function ServiceCard({ service }: { service: Service }) {
 }
 
 async function ServicesContent() {
-  const services = await getActiveServices();
-  const grouped = groupByCategory(services);
-  const activeCategories = Array.from(grouped.entries()).filter(([, items]) => items.length > 0);
+  const catalog = await getServiceCatalog();
+  const activeCategories = catalog.packages.flatMap((pkg) =>
+    pkg.categories
+      .filter((category) => category.active && category.services.length > 0)
+      .map((category) => ({ ...category, features: pkg.features })),
+  );
 
-  if (services.length === 0) {
+  if (activeCategories.length === 0) {
     return (
       <p className="text-sm text-muted-foreground">
         No services are available right now — please check back soon.
@@ -137,36 +121,40 @@ async function ServicesContent() {
           anchors (no client-side active-state tracking) since this page
           doesn't hide content behind the nav, it just scrolls to it. */}
       <div className="scrollbar-hide -mx-6 flex gap-2 overflow-x-auto border-b border-border bg-background px-6 py-4">
-        {activeCategories.map(([category]) => (
+        {activeCategories.map((category) => (
           <a
-            key={category}
-            href={`#${category}`}
+            key={category.category}
+            href={`#${category.category}`}
             className="shrink-0 rounded-none border border-border px-4 py-1.5 text-xs font-medium whitespace-nowrap text-foreground/70 transition-colors hover:border-[var(--amber-glow)] hover:text-foreground"
           >
-            {CATEGORY_LABELS[category] ?? category}
+            {category.label}
           </a>
         ))}
       </div>
 
-      {activeCategories.map(([category, items], i) => (
+      {activeCategories.map((category, i) => (
         <section
-          key={category}
-          id={category}
+          key={category.category}
+          id={category.category}
           className={`scroll-mt-16 border-b border-border ${i % 2 === 0 ? "bg-background" : "bg-card"}`}
         >
           <Reveal className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-16">
             <div className="flex flex-col gap-2">
               <h2 className="font-heading text-2xl font-medium tracking-tight text-foreground">
-                {CATEGORY_LABELS[category] ?? category}
+                {category.label}
               </h2>
-              {CATEGORY_BLURBS[category] && (
-                <p className="max-w-2xl text-sm text-muted-foreground">{CATEGORY_BLURBS[category]}</p>
+              {category.description && (
+                <p className="max-w-2xl text-sm text-muted-foreground">{category.description}</p>
               )}
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {items.map((service) => (
-                <ServiceCard key={service.id} service={service} />
+              {category.services.map((service) => (
+                <ServiceCard
+                  key={service.id}
+                  service={service}
+                  features={category.features}
+                />
               ))}
             </div>
           </Reveal>

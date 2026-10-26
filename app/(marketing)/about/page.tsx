@@ -19,9 +19,8 @@ const STATS = [
   { value: 5, suffix: "", label: "years running", barHeight: 48 },
 ];
 
-// Real service categories (see supabase/migrations/0002_services.sql /
-// lib/content/package-details.ts) — not invented copy, just the actual
-// lineup read as a scrolling ticker.
+// Real service lineup, now owner-managed through the services catalog
+// (see supabase/migrations/0043_service_catalog.sql), read as a ticker.
 const MARQUEE_TEXT =
   "Rehearsal. Recording. Livestream. Mixing. Mastering. — ";
 

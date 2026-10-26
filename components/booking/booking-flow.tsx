@@ -291,7 +291,7 @@ export function BookingFlow({ initialServiceId }: BookingFlowProps) {
 
           {!flow.servicesLoading && !flow.servicesError && (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {buildPackageCatalog(flow.services).map((pkg) => (
+              {buildPackageCatalog(flow.catalog).map((pkg) => (
                 <PackageCard key={pkg.content.id} pkg={pkg} onSelect={flow.selectService} />
               ))}
             </div>
