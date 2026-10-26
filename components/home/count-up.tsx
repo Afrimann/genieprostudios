@@ -8,6 +8,8 @@ interface CountUpProps {
   suffix?: string;
   prefix?: string;
   durationSeconds?: number;
+  decimalPlaces?: number;
+  formatValue?: (value: number) => string;
 }
 
 // Small reusable count-up — animates a number from 0 to `to` once its
@@ -15,7 +17,14 @@ interface CountUpProps {
 // rather than a full spring-per-frame React re-render (animate() drives the
 // DOM text node directly on each tick, cheaper than setState-per-frame for
 // something this simple).
-export function CountUp({ to, suffix = "", prefix = "", durationSeconds = 1.6 }: CountUpProps) {
+export function CountUp({
+  to,
+  suffix = "",
+  prefix = "",
+  durationSeconds = 1.6,
+  decimalPlaces = 0,
+  formatValue,
+}: CountUpProps) {
   const ref = useRef<HTMLSpanElement>(null);
   // "-80px 0px" (vertical-only): a bare "-80px" shrinks the detection zone
   // on all four sides, including left/right — harmless when elements sit
@@ -34,17 +43,16 @@ export function CountUp({ to, suffix = "", prefix = "", durationSeconds = 1.6 }:
     const controls = animate(0, to, {
       duration: durationSeconds,
       ease: "easeOut",
-      onUpdate: (value) => setDisplay(Math.round(value)),
+      onUpdate: (value) =>
+        setDisplay(decimalPlaces === 0 ? Math.round(value) : Number(value.toFixed(decimalPlaces))),
     });
 
     return () => controls.stop();
-  }, [inView, to, durationSeconds]);
+  }, [inView, to, durationSeconds, decimalPlaces]);
 
   return (
     <span ref={ref}>
-      {prefix}
-      {display.toLocaleString()}
-      {suffix}
+      {formatValue ? formatValue(display) : `${prefix}${display.toLocaleString()}${suffix}`}
     </span>
   );
 }

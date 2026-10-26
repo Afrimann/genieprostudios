@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Minus, ChevronRight } from "lucide-react";
+import { Check, ChevronRight, X } from "lucide-react";
 
 import type { Service } from "@/lib/repositories/service-repository";
 import type { PricedPackage } from "@/lib/services/package-catalog";
@@ -81,7 +81,10 @@ export function PackageCard({ pkg, onSelect }: PackageCardProps) {
   const [open, setOpen] = useState(false);
   const { content, dayRows, nightRows, singleRows, minPriceKobo } = pkg;
 
-  const includedPreview = content.features.filter((f) => f.included).slice(0, 2);
+  const previewFeatures = [
+    ...content.features.filter((feature) => feature.included).slice(0, 2),
+    ...content.features.filter((feature) => !feature.included),
+  ];
 
   function handleSelect(service: Service) {
     setOpen(false);
@@ -102,11 +105,15 @@ export function PackageCard({ pkg, onSelect }: PackageCardProps) {
           )}
         </div>
 
-        {includedPreview.length > 0 && (
+        {previewFeatures.length > 0 && (
           <ul className="flex flex-col gap-1.5">
-            {includedPreview.map((feature) => (
+            {previewFeatures.map((feature) => (
               <li key={feature.label} className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Check className="size-3.5 shrink-0 text-[var(--amber-glow)]" aria-hidden="true" />
+                {feature.included ? (
+                  <Check className="size-3.5 shrink-0 text-[var(--amber-glow)]" aria-hidden="true" />
+                ) : (
+                  <X className="size-3.5 shrink-0 text-red-500" aria-hidden="true" />
+                )}
                 {feature.label}
               </li>
             ))}
@@ -170,7 +177,7 @@ export function PackageCard({ pkg, onSelect }: PackageCardProps) {
                     aria-hidden="true"
                   />
                 ) : (
-                  <Minus className="mt-0.5 size-4 shrink-0 text-muted-foreground/60" aria-hidden="true" />
+                  <X className="mt-0.5 size-4 shrink-0 text-red-500" aria-hidden="true" />
                 )}
                 <span className={feature.highlight ? "font-medium" : ""}>{feature.label}</span>
               </div>
