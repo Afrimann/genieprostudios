@@ -79,7 +79,7 @@ interface PackageCardProps {
 
 export function PackageCard({ pkg, onSelect }: PackageCardProps) {
   const [open, setOpen] = useState(false);
-  const { content, dayRows, nightRows, singleRows, minPriceKobo } = pkg;
+  const { content, rateGroups, minPriceKobo } = pkg;
 
   const previewFeatures = [
     ...content.features.filter((feature) => feature.included).slice(0, 2),
@@ -146,17 +146,15 @@ export function PackageCard({ pkg, onSelect }: PackageCardProps) {
             {content.subtitle && <DialogDescription>{content.subtitle}</DialogDescription>}
           </DialogHeader>
 
-          {(dayRows.length > 0 || nightRows.length > 0) && (
+          {rateGroups.length > 0 && (
             <div className="flex flex-col gap-4 sm:flex-row">
-              <RateColumn label="Day" services={dayRows} onSelect={handleSelect} />
-              <RateColumn label="Night" services={nightRows} onSelect={handleSelect} />
-            </div>
-          )}
-
-          {singleRows.length > 0 && (
-            <div className="flex flex-col gap-2">
-              {singleRows.map((service) => (
-                <RateRow key={service.id} service={service} onSelect={handleSelect} />
+              {rateGroups.map((group) => (
+                <RateColumn
+                  key={group.category}
+                  label={group.label}
+                  services={group.services}
+                  onSelect={handleSelect}
+                />
               ))}
             </div>
           )}
