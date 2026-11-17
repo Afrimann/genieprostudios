@@ -43,7 +43,7 @@ export default function ServicesPage() {
           </h1>
           <p className="max-w-2xl text-base text-muted-foreground">
             Rehearsal, recording, livestreaming, production, and post-production — with current
-            package rates shown up front. Browse by category below, or jump straight to one.
+            package rates shown up front. Browse by package below, or jump straight to one.
           </p>
         </div>
       </section>

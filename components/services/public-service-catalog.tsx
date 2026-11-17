@@ -78,6 +78,15 @@ export function PublicServiceCatalog() {
       .filter((category) => category.active && category.services.some((service) => service.active))
       .map((category) => ({ ...category, pkg })),
   );
+  const packages = new Map<string, { title: string; category: string }>();
+  for (const entry of categories) {
+    if (!packages.has(entry.pkg.id)) {
+      packages.set(entry.pkg.id, {
+        title: entry.pkg.title,
+        category: entry.category,
+      });
+    }
+  }
 
   if (loading) {
     return <div className="flex flex-col gap-4 px-6 py-16" role="status">Loading services…</div>;
@@ -90,18 +99,28 @@ export function PublicServiceCatalog() {
   }
 
   return (
-    <div className="flex flex-col">
-      <div className="scrollbar-hide -mx-6 flex gap-2 overflow-x-auto border-b border-border bg-background px-6 py-4">
-        {categories.map((category) => (
-          <a
-            key={category.category}
-            href={`#${category.category}`}
-            className="shrink-0 rounded-none border border-border px-4 py-1.5 text-xs font-medium whitespace-nowrap text-foreground/70 transition-colors hover:border-[var(--amber-glow)] hover:text-foreground"
-          >
-            {category.label}
-          </a>
-        ))}
-      </div>
+    <div className="flex min-w-0 flex-col">
+      <nav aria-label="Browse service packages" className="border-y border-border bg-card">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-6 py-6">
+          <p className="text-xs font-medium tracking-[0.18em] text-[var(--amber-glow)] uppercase">
+            Browse packages
+          </p>
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {[...packages.entries()].map(([packageId, item]) => (
+              <a
+                key={packageId}
+                href={`#${item.category}`}
+                className="flex min-h-14 min-w-0 items-center justify-between border border-[var(--amber-glow)]/40 bg-background px-5 py-4 font-heading text-base font-medium text-foreground transition-colors hover:border-[var(--amber-glow)] hover:bg-[var(--amber-glow)] hover:text-[var(--primary-foreground)]"
+              >
+                <span className="break-words">{item.title}</span>
+                <span aria-hidden="true" className="ml-3 shrink-0 text-lg">
+                  →
+                </span>
+              </a>
+            ))}
+          </div>
+        </div>
+      </nav>
       {categories.map((category, i) => {
         // The legacy post-production package's feature metadata describes an
         // unrelated production add-on. The category's own description is the
