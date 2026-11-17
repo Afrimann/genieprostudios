@@ -610,23 +610,15 @@ function BookingSummaryStep({
         <div className="flex flex-col gap-3">
           <p className="font-medium">Terms &amp; Conditions</p>
 
-          {/* Shortened summary of the real Guidelines & Terms (app/terms/page.tsx) — kept in sync with that page's numbered list, not independent placeholder copy. */}
+          {/* Summary of the full Terms & Conditions; the linked page is the complete agreement. */}
           <div className="max-h-40 overflow-y-auto rounded-xl border border-border p-3 text-xs text-muted-foreground">
             <p>
-              A minimum 70% deposit secures this booking; the remaining balance is due
-              before studio access, no later than 24 hours before your session. Missed
-              sessions without prior notice are non-refundable, and a session is
-              cancelled without refund after a 35-minute no-call-no-show — please reach
-              out if you&apos;re running late so your session can be rescheduled.
-              Rescheduling a session in advance attracts a charge of 25% of the stated
-              price. Arrive 30 minutes early for sound checks — after 30 minutes, your
-              booked time counts down regardless, and additional setup time is charged
-              at ₦25,000/hour. Booked time is strictly adhered to; only bottled water is
-              permitted in the studio. This is a shortened summary —{" "}
+              These Terms &amp; Conditions apply to your booking and use of Genie Pro
+              Studios. Please review the complete agreement before accepting. Your
+              acceptance is recorded against this booking.{" "}
               <Link href="/terms" className="underline underline-offset-2">
-                read the full terms
-              </Link>{" "}
-              for the complete, governing agreement.
+                Read the full Terms &amp; Conditions
+              </Link>
             </p>
           </div>
 
@@ -659,7 +651,7 @@ function BookingSummaryStep({
                 )}
               />
               <Label htmlFor="agreed" className="font-normal">
-                I have read and agree to the terms and conditions above.
+                I have read and agree to the Terms &amp; Conditions.
               </Label>
             </div>
 
