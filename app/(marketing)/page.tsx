@@ -12,10 +12,9 @@ import { TestimonialsTeaser } from "@/components/home/testimonials-teaser";
 import { RecordLabelTeaser } from "@/components/home/record-label-teaser";
 import { ContactTeaser } from "@/components/home/contact-teaser";
 
-// ServicesTeaser/FeaturedSession/SessionsReel all read from Supabase (via
-// cookies()) — must stay Suspense-wrapped or cacheComponents throws at
-// prerender time (the same class of bug already hit on /sign-up, /login,
-// /book, and /dashboard).
+// FeaturedSession/SessionsReel read from Supabase during server rendering.
+// ServicesTeaser loads its public catalog through the client hook/server
+// action boundary.
 function ServicesTeaserFallback() {
   return (
     <section className="border-t border-border bg-background">

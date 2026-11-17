@@ -1,29 +1,34 @@
+"use client";
+
 import Link from "next/link";
 
-import { getServiceCatalog } from "@/lib/repositories/service-repository";
+import { useServiceCatalog } from "@/lib/hooks/use-service-catalog";
+import { packageDetailsHref } from "@/lib/services/package-details";
 import { formatKobo } from "@/lib/utils/money";
 import { Reveal } from "@/components/ui/reveal";
 
-// Horizontal scroll-snap row of "rack units" — each category reads like a
-// module in an equipment rack rather than a repeated SaaS-style pricing
-// card grid. Real data (getActiveServices), grouped by category, showing
-// the cheapest line item per category as "from ₦X" — the full breakdown
-// stays on /services, this is a teaser.
-async function getCategorySummaries() {
-  const catalog = await getServiceCatalog();
-  return catalog.packages.flatMap((pkg) =>
+// Client-side hook keeps data access behind Component → Hook → Service → Repository.
+export function ServicesTeaser() {
+  const { catalog, loading } = useServiceCatalog();
+  const categories = catalog.packages.flatMap((pkg) =>
     pkg.categories
-      .filter((category) => category.active && category.services.length > 0)
-      .map((category) => ({
-        category: category.category,
-        label: category.label,
-        fromKobo: Math.min(...category.services.map((service) => service.price_kobo)),
-      })),
+      .filter((category) => category.active && category.services.some((service) => service.active))
+      .map((category) => {
+        const services = category.services.filter((service) => service.active);
+        const cheapest = services.reduce((current, service) =>
+          service.price_kobo < current.price_kobo ? service : current,
+        );
+        return {
+          category: category.category,
+          label: category.label,
+          slug: pkg.slug,
+          fromKobo: cheapest.price_kobo,
+          unit: cheapest.is_addon
+            ? cheapest.category === "digital_production" ? "/track" : "/song"
+            : "",
+        };
+      }),
   );
-}
-
-export async function ServicesTeaser() {
-  const categories = await getCategorySummaries();
 
   return (
     <section className="border-t border-border bg-background">
@@ -38,7 +43,9 @@ export async function ServicesTeaser() {
         </div>
 
         <div className="scrollbar-hide -mx-6 flex snap-x snap-mandatory gap-4 overflow-x-auto px-6 pb-4">
-          {categories.map((entry) => (
+          {loading ? (
+            <p className="text-sm text-muted-foreground" role="status">Loading service rates…</p>
+          ) : categories.map((entry) => (
             <div
               key={entry.category}
               className="flex w-56 shrink-0 snap-start flex-col gap-4 rounded-2xl border border-border bg-card p-5"
@@ -57,9 +64,15 @@ export async function ServicesTeaser() {
                   {entry.label}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  from {formatKobo(entry.fromKobo)}
+                  from {formatKobo(entry.fromKobo)}{entry.unit}
                 </p>
               </div>
+              <Link
+                href={packageDetailsHref(entry.slug, entry.category)}
+                className="mt-auto text-xs font-medium text-[var(--amber-glow)] underline underline-offset-4"
+              >
+                Learn more
+              </Link>
             </div>
           ))}
 

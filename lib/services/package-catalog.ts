@@ -12,6 +12,14 @@ export type PricedPackage = {
   minPriceKobo: number;
 };
 
+export function serviceRateUnitLabel(service: Service): string {
+  if (service.is_addon) {
+    return service.category === "digital_production" ? "per track" : "per song";
+  }
+
+  return `${service.duration_hours} hour${service.duration_hours === 1 ? "" : "s"}`;
+}
+
 /**
  * Groups active service rates by their owner-managed package and category.
  * Categories with no active rates are omitted; packages without bookable

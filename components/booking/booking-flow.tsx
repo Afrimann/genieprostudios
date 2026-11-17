@@ -98,6 +98,8 @@ function SelectionSidebar({
   // for a "Songs" count + the real multiplied total.
   songCount?: number;
 }) {
+  const itemCountLabel = service.category === "digital_production" ? "Tracks" : "Songs";
+
   return (
     <aside className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5">
       <p className="text-xs font-medium tracking-[0.15em] text-muted-foreground uppercase">
@@ -112,7 +114,7 @@ function SelectionSidebar({
         {songCount ? (
           <>
             <div className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Songs</span>
+              <span className="text-muted-foreground">{itemCountLabel}</span>
               <span className="font-medium text-foreground">{songCount}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
@@ -479,6 +481,7 @@ export function BookingFlow({ initialServiceId }: BookingFlowProps) {
           <BookingSummaryStep
             booking={flow.booking}
             serviceLabel={flow.selectedService.label}
+            itemUnit={flow.selectedService.category === "digital_production" ? "track" : "song"}
             onCancelled={flow.resetFlow}
           />
         </StepLayout>
@@ -501,10 +504,12 @@ type SummaryBooking = {
 function BookingSummaryStep({
   booking,
   serviceLabel,
+  itemUnit,
   onCancelled,
 }: {
   booking: SummaryBooking;
   serviceLabel: string;
+  itemUnit: "song" | "track";
   // Clears the whole flow back to step one. Passed down rather than
   // relying on a route change, because this component is already mounted
   // on /book — see CancelBookingButton's onCancelled prop comment.
@@ -587,7 +592,7 @@ function BookingSummaryStep({
         <CardDescription>
           {booking.session_start_time && booking.session_end_time
             ? formatTimeRange(booking.session_start_time, booking.session_end_time)
-            : "No studio time reserved — this is a per-song add-on, queued once payment is confirmed."}
+            : `No studio time reserved — this is a per-${itemUnit} add-on, queued once payment is confirmed.`}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-6 text-sm">

@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import { Check, ChevronRight, X } from "lucide-react";
+import Link from "next/link";
 
 import type { Service } from "@/lib/repositories/service-repository";
-import type { PricedPackage } from "@/lib/services/package-catalog";
+import { serviceRateUnitLabel, type PricedPackage } from "@/lib/services/package-catalog";
+import { packageDetailsHref } from "@/lib/services/package-details";
 import { formatKobo } from "@/lib/utils/money";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -15,9 +18,8 @@ import {
 } from "@/components/ui/dialog";
 
 function durationLabel(service: Service): string {
-  return service.is_addon
-    ? "Per song"
-    : `${service.duration_hours} hour${service.duration_hours === 1 ? "" : "s"}`;
+  const label = serviceRateUnitLabel(service);
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function RateRow({
@@ -49,10 +51,14 @@ function RateRow({
 
 function RateColumn({
   label,
+  slug,
+  category,
   services,
   onSelect,
 }: {
   label: string;
+  slug: string;
+  category: string;
   services: Service[];
   onSelect: (service: Service) => void;
 }) {
@@ -60,9 +66,17 @@ function RateColumn({
 
   return (
     <div className="flex flex-1 flex-col gap-2">
-      <span className="text-xs font-medium tracking-[0.15em] text-[var(--amber-glow)] uppercase">
-        {label}
-      </span>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium tracking-[0.15em] text-[var(--amber-glow)] uppercase">
+          {label}
+        </span>
+        <Link
+          href={packageDetailsHref(slug, category)}
+          className="text-xs font-medium text-foreground underline decoration-border underline-offset-4 hover:text-[var(--amber-glow)]"
+        >
+          Learn more
+        </Link>
+      </div>
       <div className="flex flex-col gap-2">
         {services.map((service) => (
           <RateRow key={service.id} service={service} onSelect={onSelect} />
@@ -80,11 +94,17 @@ interface PackageCardProps {
 export function PackageCard({ pkg, onSelect }: PackageCardProps) {
   const [open, setOpen] = useState(false);
   const { content, rateGroups, minPriceKobo } = pkg;
+  const lowestRate = rateGroups
+    .flatMap((group) => group.services)
+    .find((service) => service.price_kobo === minPriceKobo);
 
-  const previewFeatures = [
-    ...content.features.filter((feature) => feature.included).slice(0, 2),
-    ...content.features.filter((feature) => !feature.included),
-  ];
+  const previewFeatures = content.slug === "post-production-addon"
+    ? []
+    : [
+        ...content.features.filter((feature) => feature.included).slice(0, 2),
+        ...content.features.filter((feature) => !feature.included),
+      ];
+  const packageFeatures = content.slug === "post-production-addon" ? [] : content.features;
 
   function handleSelect(service: Service) {
     setOpen(false);
@@ -93,51 +113,63 @@ export function PackageCard({ pkg, onSelect }: PackageCardProps) {
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="group/card flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 text-left transition-all hover:-translate-y-0.5 hover:border-[var(--amber-glow)]/40 hover:shadow-[0_8px_30px_rgba(0,0,0,0.35)]"
-      >
-        <div className="flex flex-col gap-1">
-          <h3 className="font-heading text-lg font-medium text-foreground">{content.title}</h3>
-          {content.subtitle && (
-            <p className="text-sm text-muted-foreground">{content.subtitle}</p>
+      <div className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 transition-all hover:-translate-y-0.5 hover:border-[var(--amber-glow)]/40 hover:shadow-[0_8px_30px_rgba(0,0,0,0.35)]">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="group/card flex flex-1 flex-col gap-4 text-left"
+        >
+          <div className="flex flex-col gap-1">
+            <h3 className="font-heading text-lg font-medium text-foreground">{content.title}</h3>
+            {content.subtitle && (
+              <p className="text-sm text-muted-foreground">{content.subtitle}</p>
+            )}
+          </div>
+
+          {previewFeatures.length > 0 && (
+            <ul className="flex flex-col gap-1.5">
+              {previewFeatures.map((feature) => (
+                <li key={feature.label} className="flex items-center gap-2 text-xs text-muted-foreground">
+                  {feature.included ? (
+                    <Check className="size-3.5 shrink-0 text-[var(--amber-glow)]" aria-hidden="true" />
+                  ) : (
+                    <X className="size-3.5 shrink-0 text-red-500" aria-hidden="true" />
+                  )}
+                  {feature.label}
+                </li>
+              ))}
+            </ul>
           )}
-        </div>
 
-        {previewFeatures.length > 0 && (
-          <ul className="flex flex-col gap-1.5">
-            {previewFeatures.map((feature) => (
-              <li key={feature.label} className="flex items-center gap-2 text-xs text-muted-foreground">
-                {feature.included ? (
-                  <Check className="size-3.5 shrink-0 text-[var(--amber-glow)]" aria-hidden="true" />
-                ) : (
-                  <X className="size-3.5 shrink-0 text-red-500" aria-hidden="true" />
+          <div className="mt-auto flex w-full items-center justify-between gap-3 border-t border-border pt-4">
+            <div className="flex flex-col">
+              <span className="text-[0.65rem] tracking-wide text-muted-foreground uppercase">
+                From
+              </span>
+              <span className="font-mono text-lg font-semibold text-foreground">
+                {formatKobo(minPriceKobo)}
+                {lowestRate?.is_addon && (
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">
+                    /{lowestRate.category === "digital_production" ? "track" : "song"}
+                  </span>
                 )}
-                {feature.label}
-              </li>
-            ))}
-          </ul>
-        )}
-
-        <div className="mt-auto flex items-center justify-between gap-3 border-t border-border pt-4">
-          <div className="flex flex-col">
-            <span className="text-[0.65rem] tracking-wide text-muted-foreground uppercase">
-              From
-            </span>
-            <span className="font-mono text-lg font-semibold text-foreground">
-              {formatKobo(minPriceKobo)}
+              </span>
+            </div>
+            <span className="flex items-center gap-1 text-sm font-medium text-[var(--amber-glow)]">
+              Select option
+              <ChevronRight
+                className="size-4 transition-transform group-hover/card:translate-x-0.5"
+                aria-hidden="true"
+              />
             </span>
           </div>
-          <span className="flex items-center gap-1 text-sm font-medium text-[var(--amber-glow)]">
-            View details
-            <ChevronRight
-              className="size-4 transition-transform group-hover/card:translate-x-0.5"
-              aria-hidden="true"
-            />
-          </span>
-        </div>
-      </button>
+        </button>
+        {rateGroups[0] && (
+          <Button asChild variant="outline" className="w-full rounded-none">
+            <Link href={packageDetailsHref(content.slug, rateGroups[0].category)}>Learn more</Link>
+          </Button>
+        )}
+      </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-h-[85vh] max-w-lg gap-5 overflow-y-auto sm:max-w-lg">
@@ -152,6 +184,8 @@ export function PackageCard({ pkg, onSelect }: PackageCardProps) {
                 <RateColumn
                   key={group.category}
                   label={group.label}
+                  slug={content.slug}
+                  category={group.category}
                   services={group.services}
                   onSelect={handleSelect}
                 />
@@ -160,7 +194,7 @@ export function PackageCard({ pkg, onSelect }: PackageCardProps) {
           )}
 
           <div className="flex flex-col gap-2 border-t border-border pt-4">
-            {content.features.map((feature) => (
+            {packageFeatures.map((feature) => (
               <div
                 key={feature.label}
                 className={`flex items-start gap-2.5 text-sm ${

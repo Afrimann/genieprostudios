@@ -64,6 +64,9 @@ export function AddonSongsStep({
   notes,
   onNotesChange,
 }: AddonSongsStepProps) {
+  const itemLabel = service.category === "digital_production" ? "track" : "song";
+  const itemLabelPlural = itemLabel === "track" ? "tracks" : "songs";
+
   const {
     control,
     register,
@@ -98,10 +101,10 @@ export function AddonSongsStep({
     <div className="flex flex-col gap-4">
       <div>
         <h2 className="font-heading text-xl font-medium text-foreground">
-          Tell us about your songs
+          Tell us about your {itemLabelPlural}
         </h2>
         <p className="text-sm text-muted-foreground">
-          {service.label} is priced per song — add a title and the WAV file for each track.
+          {service.label} is priced per {itemLabel} — add a title and WAV file for each {itemLabel}.
         </p>
       </div>
 
@@ -153,9 +156,11 @@ export function AddonSongsStep({
 
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-foreground">Songs</p>
+            <p className="text-sm font-medium text-foreground">
+              {itemLabelPlural === "tracks" ? "Tracks" : "Songs"}
+            </p>
             <span className="font-mono text-xs text-muted-foreground">
-              {songCount} song{songCount === 1 ? "" : "s"} · {formatKobo(totalKobo)}
+              {songCount} {songCount === 1 ? itemLabel : itemLabelPlural} · {formatKobo(totalKobo)}
             </span>
           </div>
 
@@ -171,7 +176,7 @@ export function AddonSongsStep({
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-xs font-medium tracking-[0.1em] text-muted-foreground uppercase">
-                    Song {index + 1}
+                    {itemLabel === "track" ? "Track" : "Song"} {index + 1}
                   </span>
                   {fields.length > 1 && !submissionStarted && (
                     <Button
@@ -259,7 +264,7 @@ export function AddonSongsStep({
               className="w-fit"
             >
               <Plus className="size-4" aria-hidden="true" />
-              Add another song
+              Add another {itemLabel}
             </Button>
           )}
         </div>
