@@ -17,6 +17,7 @@ import type { ServiceCatalog } from "@/lib/repositories/service-repository";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -362,8 +363,19 @@ export function ServiceCatalogManager() {
                       <Input name="displayOrder" type="number" min={0} step={1} defaultValue={category.display_order} required />
                     </div>
                     <div className="flex flex-col gap-1.5 sm:col-span-2">
-                      <Label>Description</Label>
-                      <Input name="description" defaultValue={category.description} maxLength={500} />
+                      <Label htmlFor={`category-description-${category.category}`}>
+                        Description shown on the Services page
+                      </Label>
+                      <Textarea
+                        id={`category-description-${category.category}`}
+                        name="description"
+                        defaultValue={category.description}
+                        maxLength={500}
+                        rows={3}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Edit and save this text whenever you want to update the public category description.
+                      </p>
                     </div>
                     <label className="flex items-center gap-2 text-sm">
                       <input type="checkbox" name="active" defaultChecked={category.active} />
@@ -468,8 +480,16 @@ export function ServiceCatalogManager() {
                   <Input name="label" placeholder="e.g. Weekend Sessions" required />
                 </div>
                 <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <Label>Description</Label>
-                  <Input name="description" placeholder="Short explanation shown on the Services page" />
+                  <Label htmlFor={`new-category-description-${pkg.id}`}>
+                    Description shown on the Services page
+                  </Label>
+                  <Textarea
+                    id={`new-category-description-${pkg.id}`}
+                    name="description"
+                    placeholder="Short explanation shown on the Services page"
+                    maxLength={500}
+                    rows={3}
+                  />
                 </div>
                 <Button type="submit" variant="outline" disabled={saving} className="w-fit sm:col-span-2">
                   Add category

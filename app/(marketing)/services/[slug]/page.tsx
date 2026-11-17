@@ -9,17 +9,20 @@ type ServiceDetailsProps = {
   searchParams: Promise<{ category?: string }>;
 };
 
+async function ServiceDetailsContent({ params, searchParams }: ServiceDetailsProps) {
+  const [{ slug }, { category }] = await Promise.all([params, searchParams]);
+  return <ServicePackageDetails slug={slug} category={category} />;
+}
+
 export const metadata: Metadata = {
   title: "Package details | GenieProStudios",
   description: "Explore package rates and inclusions, then book a studio service.",
 };
 
-export default async function ServiceDetailsPage({
+export default function ServiceDetailsPage({
   params,
   searchParams,
 }: ServiceDetailsProps) {
-  const [{ slug }, { category }] = await Promise.all([params, searchParams]);
-
   return (
     <main className="flex flex-col">
       <section className="border-b border-border bg-background">
@@ -40,7 +43,7 @@ export default async function ServiceDetailsPage({
       </section>
       <section className="mx-auto w-full max-w-5xl px-6">
         <Suspense fallback={<p className="py-16 text-sm text-muted-foreground">Loading package details…</p>}>
-          <ServicePackageDetails slug={slug} category={category} />
+          <ServiceDetailsContent params={params} searchParams={searchParams} />
         </Suspense>
       </section>
     </main>
