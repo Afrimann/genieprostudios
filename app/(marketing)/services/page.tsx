@@ -2,167 +2,15 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import {
-  getServiceCatalog,
-  type Service,
-  type ServicePackageFeature,
-} from "@/lib/repositories/service-repository";
-import { formatKobo } from "@/lib/utils/money";
 import { Button } from "@/components/ui/button";
-import { Reveal } from "@/components/ui/reveal";
 import { TriumphTeaser } from "@/components/home/triumph-teaser";
-import { Check, X } from "lucide-react";
+import { PublicServiceCatalog } from "@/components/services/public-service-catalog";
 
 // Public marketing page — static shell + dynamic data via Suspense, per
 // AGENTS.md fix #2 (mirrors app/sign-up/page.tsx). No instant=false here:
 // there's nothing inherently per-request about this page (no auth, no
 // cookies), so a static shell around the dynamic services fetch is the
 // correct fit under cacheComponents.
-
-// Per-card mini VU-bar graphic — same "rack unit" motif as
-// components/home/services-teaser.tsx, so the full /services page reads as
-// a continuation of that teaser rather than a visually different page.
-const BAR_HEIGHTS = [10, 16, 12, 20, 14];
-
-function ServiceCard({
-  service,
-  features,
-}: {
-  service: Service;
-  features: ServicePackageFeature[];
-}) {
-  return (
-    <div className="group flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 transition-all duration-300 hover:-translate-y-1 hover:border-[var(--amber-glow)]/60 hover:shadow-[0_12px_32px_rgba(0,0,0,0.25)]">
-      <div className="flex items-end gap-1" aria-hidden="true">
-        {BAR_HEIGHTS.map((height, i) => (
-          <span
-            key={i}
-            style={{ height }}
-            className="w-1.5 rounded-none bg-[var(--amber-glow)]/70 transition-all duration-300 group-hover:bg-[var(--amber-glow)]"
-          />
-        ))}
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <h3 className="font-heading text-lg font-medium text-foreground">{service.label}</h3>
-        <p className="text-sm text-muted-foreground">
-          {service.is_addon
-            ? "Priced per song · handled remotely, no studio time needed"
-            : `${service.duration_hours} hour${service.duration_hours === 1 ? "" : "s"} session`}
-        </p>
-      </div>
-
-      <p className="font-heading text-2xl font-medium text-foreground">
-        {formatKobo(service.price_kobo)}
-      </p>
-
-      {features && (
-        <ul className="flex flex-col gap-1.5 border-t border-border pt-4">
-          {features.map((feature) => (
-            <li
-              key={feature.label}
-              className="flex items-start gap-2 text-xs text-muted-foreground"
-            >
-              {feature.included ? (
-                <Check
-                  className="mt-0.5 size-3.5 shrink-0 text-[var(--amber-glow)]"
-                  aria-hidden="true"
-                />
-              ) : (
-                <X className="mt-0.5 size-3.5 shrink-0 text-red-500" aria-hidden="true" />
-              )}
-              {feature.label}
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className="mt-auto pt-2">
-        {service.category === "post_production" && service.is_addon ? (
-          // Existing post-production rates are fulfilled remotely by Triumph
-          // Music Global rather than through a studio booking.
-          <Button asChild className="w-full rounded-none bg-[#22e6c8] text-[#0b0712] hover:bg-[#1cc9ae]">
-            <Link href="/triumph#start-project">Send a request to Triumph</Link>
-          </Button>
-        ) : (
-          <Button
-            asChild
-            className="w-full rounded-none bg-[var(--amber-glow)] text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
-          >
-            <Link href={`/book?service=${service.id}`}>Book this</Link>
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-async function ServicesContent() {
-  const catalog = await getServiceCatalog();
-  const activeCategories = catalog.packages.flatMap((pkg) =>
-    pkg.categories
-      .filter((category) => category.active && category.services.length > 0)
-      .map((category) => ({ ...category, features: pkg.features })),
-  );
-
-  if (activeCategories.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No services are available right now — please check back soon.
-      </p>
-    );
-  }
-
-  return (
-    <div className="flex flex-col">
-      {/* Jump nav — anchors straight to a category instead of scrolling
-          past seven others to find, say, add-ons. Same pill styling as
-          components/portfolio/work-grid.tsx's filter buttons, but plain
-          anchors (no client-side active-state tracking) since this page
-          doesn't hide content behind the nav, it just scrolls to it. */}
-      <div className="scrollbar-hide -mx-6 flex gap-2 overflow-x-auto border-b border-border bg-background px-6 py-4">
-        {activeCategories.map((category) => (
-          <a
-            key={category.category}
-            href={`#${category.category}`}
-            className="shrink-0 rounded-none border border-border px-4 py-1.5 text-xs font-medium whitespace-nowrap text-foreground/70 transition-colors hover:border-[var(--amber-glow)] hover:text-foreground"
-          >
-            {category.label}
-          </a>
-        ))}
-      </div>
-
-      {activeCategories.map((category, i) => (
-        <section
-          key={category.category}
-          id={category.category}
-          className={`scroll-mt-16 border-b border-border ${i % 2 === 0 ? "bg-background" : "bg-card"}`}
-        >
-          <Reveal className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-6 py-16">
-            <div className="flex flex-col gap-2">
-              <h2 className="font-heading text-2xl font-medium tracking-tight text-foreground">
-                {category.label}
-              </h2>
-              {category.description && (
-                <p className="max-w-2xl text-sm text-muted-foreground">{category.description}</p>
-              )}
-            </div>
-
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              {category.services.map((service) => (
-                <ServiceCard
-                  key={service.id}
-                  service={service}
-                  features={category.features}
-                />
-              ))}
-            </div>
-          </Reveal>
-        </section>
-      ))}
-    </div>
-  );
-}
 
 function ServicesFallback() {
   return (
@@ -194,16 +42,15 @@ export default function ServicesPage() {
             Every session, priced up front.
           </h1>
           <p className="max-w-2xl text-base text-muted-foreground">
-            Rehearsal, multi-track recording, livestreaming, and mixing &amp; mastering — each
-            priced by the hour or by song, no hidden fees. Browse by category below, or jump
-            straight to one with the links.
+            Rehearsal, recording, livestreaming, production, and post-production — with current
+            package rates shown up front. Browse by category below, or jump straight to one.
           </p>
         </div>
       </section>
 
       <section className="bg-background">
         <Suspense fallback={<ServicesFallback />}>
-          <ServicesContent />
+          <PublicServiceCatalog />
         </Suspense>
       </section>
 

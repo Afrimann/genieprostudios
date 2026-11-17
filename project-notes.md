@@ -162,28 +162,43 @@ never the UI.
   re-hosting via Cloudinary — asked separately, but facade is the likely fit since the
   footage already lives on YouTube/Instagram rather than as raw files we own.
 
-### Lovable prototype (source of truth for services/packages)
-Prototype at https://genieprostudios.lovable.app. Extracted service/pricing info to fold
-into `/services` and the booking flow:
+### Current approved services and pricing
+
+The owner supplied the current package names, inclusions, and exact totals. The amounts
+below are authoritative; do not apply an additional duration discount.
 
 **Rehearsal Sessions**
-- Day: 1hr ₦30,000 · 2hrs ₦60,000 · 3hrs ₦90,000
+- Day: 1hr ₦30,000 · 2hrs ₦60,000 · 3hrs ₦80,000 · 4hrs ₦100,000 · 5hrs ₦125,000 · 6hrs ₦150,000
 - Night: 4hrs ₦80,000 · 6hrs ₦100,000
 
 **Multi-track Recording**
-- Day: 2hrs ₦100,000 · 4hrs ₦200,000 · 6hrs ₦250,000
-- Night: 2hrs ₦100,000 · 4hrs ₦200,000 · 6hrs ₦250,000
+- Day and Night: 2hrs ₦100,000 · 3hrs ₦150,000 · 4hrs ₦180,000 · 5hrs ₦220,000 · 6hrs ₦250,000
 
-**Video Livestream (iPhone single angle)**
-- Day: 1hr ₦50,000 · 2hrs ₦80,000
+**Stereo Recording Session** (renamed from Virtual Package)
+- Day and Night: 1hr ₦40,000 · 2hrs ₦80,000 · 3hrs ₦100,000 · 4hrs ₦140,000 · 5hrs ₦180,000 · 6hrs ₦200,000
 
-**Virtual Package (Facebook/YouTube Live)**
-- Day: 2hrs ₦80,000 · 3hrs ₦120,000
-- Night: 4hrs ₦160,000
+**Stereo Recording Session + 1-Camera Streaming**
+- Day and Night, all-in totals: 1hr ₦70,000 · 2hrs ₦130,000 · 3hrs ₦150,000 · 4hrs ₦150,000 · 5hrs ₦200,000 · 6hrs ₦200,000
 
-**Post-Production Add-ons**
-- Mix + Master Bundle: ₦200,000/song
-- Mixing & Mastering: ₦80,000/song
+**Standalone Video Livestream (iPhone single angle)**
+- Retain separately: 1hr ₦50,000 · 2hrs ₦80,000
+
+**Acoustic / Spontaneous Live Studio Cover Session**
+- 1hr ₦100,000; includes mixing, mastering, clean iPhone video, and a 10–15 minute mixed audio/video cover.
+
+**Digital Acoustic / Spontaneous Session**
+- 1hr ₦50,000; includes mixing, mastering, clean iPhone video, and a 10–15 minute mixed audio/video cover.
+
+**Worship Medley Multitrack**
+- 1hr ₦200,000; includes mixing, mastering, and clean iPhone video.
+
+**Video Shoot / Extra-Curricular Activities**
+- 1hr ₦30,000 · 2hrs ₦60,000 · 3hrs ₦80,000 · 4hrs ₦100,000 · 5hrs ₦125,000 · 6hrs ₦150,000
+
+**Post-Production Add-ons** (show each separately)
+- Mix and Master Bundle: ₦150,000/song
+- Post-Production Add-ons: ₦80,000/song
+- Digital Production: ₦250,000/track, mixing and mastering included
 
 Other prototype details worth carrying over:
 - 30-minute mandatory setup buffer between booked slots (affects availability/slot logic).
@@ -201,4 +216,4 @@ Other prototype details worth carrying over:
   Supabase, so the project shows real DB activity daily and doesn't get paused for inactivity.
 
 ---
-*Last updated: 2026-09-26*
+*Last updated: 2026-11-17*
