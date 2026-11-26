@@ -192,8 +192,16 @@ async function BookingDetail({ id }: { id: string }) {
                 <span className="text-xs text-muted-foreground">{formatDateTime(payment.createdAt)}</span>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">{PAYMENT_TYPE_LABELS[payment.type] ?? payment.type}</Badge>
-                  <Badge variant={payment.status === "success" ? "default" : "secondary"}>
-                    {payment.status}
+                  <Badge
+                    variant={
+                      payment.status === "success"
+                        ? "default"
+                        : payment.status === "refund_required"
+                          ? "destructive"
+                          : "secondary"
+                    }
+                  >
+                    {payment.status === "refund_required" ? "Refund required" : payment.status}
                   </Badge>
                   <span className="font-mono font-medium text-foreground tabular-nums">
                     {formatKobo(payment.amountKobo)}

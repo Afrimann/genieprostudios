@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 const POLL_INTERVAL_MS = 2000;
 const MAX_POLL_MS = 30000;
 
-type PollStatus = "pending" | "success" | "failed" | "timed_out";
+type PollStatus = "pending" | "success" | "failed" | "refund_required" | "timed_out";
 
 interface ConfirmationPollerProps {
   reference: string;
@@ -41,7 +41,11 @@ export function ConfirmationPoller({ reference }: ConfirmationPollerProps) {
 
       if (result.bookingId) setBookingId(result.bookingId);
 
-      if (result.status === "success" || result.status === "failed") {
+      if (
+        result.status === "success" ||
+        result.status === "failed" ||
+        result.status === "refund_required"
+      ) {
         setStatus(result.status);
         return;
       }
@@ -101,6 +105,21 @@ export function ConfirmationPoller({ reference }: ConfirmationPollerProps) {
             <Link href="/dashboard">Dashboard</Link>
           </Button>
         </div>
+      </div>
+    );
+  }
+
+  if (status === "refund_required") {
+    return (
+      <div className="flex flex-col items-center gap-3 py-2 text-center">
+        <XCircle className="size-8 text-destructive" aria-hidden="true" />
+        <p className="font-medium text-foreground">Your payment went through, but this time is no longer available.</p>
+        <p className="max-w-sm text-xs text-muted-foreground">
+          This payment has been flagged for refund review and your booking was cancelled. Please contact the studio if you need help.
+        </p>
+        <Button asChild variant="outline" className="h-10 rounded-none px-5 text-sm font-medium">
+          <Link href="/dashboard">Go to your dashboard</Link>
+        </Button>
       </div>
     );
   }

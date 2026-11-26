@@ -189,6 +189,36 @@ function OrderFailed({ bookingId }: { bookingId: string | null }) {
   );
 }
 
+function OrderRefundRequired() {
+  return (
+    <div className="flex flex-col items-center gap-6 text-center">
+      <div className="flex size-16 items-center justify-center rounded-full bg-destructive/15">
+        <XCircle className="size-9 text-destructive" aria-hidden="true" />
+      </div>
+      <div className="flex flex-col gap-2">
+        <h1 className="font-heading text-2xl font-medium text-foreground">
+          This time is no longer available
+        </h1>
+        <p className="max-w-md text-sm text-muted-foreground">
+          Your payment went through, but this payment has been flagged for refund review and your
+          booking was cancelled. Please contact the studio if you need help.
+        </p>
+      </div>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button
+          asChild
+          className="h-11 rounded-none bg-[var(--amber-glow)] px-6 text-sm font-medium text-[var(--primary-foreground)] hover:bg-[var(--amber-dim)]"
+        >
+          <Link href="/book">Choose another time</Link>
+        </Button>
+        <Button asChild variant="outline" className="h-11 rounded-none px-6 text-sm font-medium">
+          <Link href="/dashboard">Go to your dashboard</Link>
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // Paystack appends both `reference` and `trxref` (a legacy alias of the
 // same value) to the callback URL — only `reference` is read here.
 async function ConfirmationContent({
@@ -225,6 +255,10 @@ async function ConfirmationContent({
 
   if (payment.status === "failed") {
     return <OrderFailed bookingId={payment.booking_id ?? null} />;
+  }
+
+  if (payment.status === "refund_required") {
+    return <OrderRefundRequired />;
   }
 
   // status === "pending" — hand off to the client-side poller, which is the

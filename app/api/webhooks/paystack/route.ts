@@ -105,6 +105,8 @@ export async function POST(request: Request): Promise<Response> {
     // Nothing to do — either a stale/foreign reference, or (in theory) the
     // webhook arrived before our own initialize-side insert committed.
     console.error("paystack webhook: no payment found for reference", reference);
+  } else if (result.outcome === "refund_required") {
+    console.error("paystack webhook: payment needs a refund after a booking race", reference);
   }
 
   // Every outcome (including error/not_found) still acks with 200: Paystack

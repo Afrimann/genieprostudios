@@ -225,8 +225,16 @@ async function BookingDetail({ id }: { id: string }) {
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant="outline">{payment.type === "deposit" ? "Deposit" : "Balance"}</Badge>
-                  <Badge variant={payment.status === "success" ? "default" : "secondary"}>
-                    {payment.status}
+                  <Badge
+                    variant={
+                      payment.status === "success"
+                        ? "default"
+                        : payment.status === "refund_required"
+                          ? "destructive"
+                          : "secondary"
+                    }
+                  >
+                    {payment.status === "refund_required" ? "Refund required" : payment.status}
                   </Badge>
                   <span className="font-mono font-medium text-foreground tabular-nums">
                     {formatKobo(payment.amountKobo)}

@@ -338,7 +338,7 @@ export async function initializePayment(
 // Deliberately kept small and separate from initializePayment() above, which
 // is owned by the parallel backend correction pass — this only reads.
 export type PaymentStatusResult = {
-  status: "pending" | "success" | "failed" | "not_found";
+  status: "pending" | "success" | "failed" | "refund_required" | "not_found";
   bookingId?: string;
 };
 
@@ -490,6 +490,10 @@ async function reconcileAgainstPaystack(
 
     if (result.outcome === "applied" || result.outcome === "already_processed") {
       return { status: "success", bookingId: current.bookingId };
+    }
+
+    if (result.outcome === "refund_required") {
+      return { status: "refund_required", bookingId: current.bookingId };
     }
 
     console.error("reconcileAgainstPaystack: failed to apply confirmed payment", reference, result);
