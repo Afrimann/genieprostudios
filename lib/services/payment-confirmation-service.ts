@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { BookingStatus } from "@/lib/services/booking-service";
+import type { Booking, BookingStatus } from "@/lib/services/booking-service";
 import {
   sendOwnerNewBookingEmail,
   sendCustomerBookingConfirmedEmail,
@@ -19,13 +19,28 @@ import { SITE_URL } from "@/lib/utils/site-url";
 export type ApplyPaymentResult =
   | { outcome: "applied"; newStatus: BookingStatus }
   | { outcome: "already_processed"; newStatus: BookingStatus }
+  | { outcome: "refund_required"; newStatus: BookingStatus }
+  | { outcome: "not_found" }
+  | { outcome: "error"; message: string };
+
+type ConfirmPaymentRpcResult =
+  | {
+      outcome: "applied";
+      new_status: BookingStatus;
+      previous_status: BookingStatus;
+      new_amount_paid_kobo: number;
+      booking: Booking;
+    }
+  | { outcome: "already_processed"; new_status: BookingStatus }
+  | { outcome: "refund_required"; new_status: BookingStatus; booking_id: string }
   | { outcome: "not_found" }
   | { outcome: "error"; message: string };
 
 /**
- * Marks a `payments` row success (idempotently) and rolls its amount into
- * the linked booking, deriving the booking's new status the same way for
- * every caller. Always uses the service-role admin client — there is no
+ * Atomically confirms a payment and rolls its amount into the linked
+ * booking, deriving the booking's new status the same way for every caller.
+ * A payment that loses a slot race is marked refund_required instead.
+ * Always uses the service-role admin client — there is no
  * customer session on a webhook, and this same rule (payments/bookings are
  * writable only by service-role, per 0010_rls_policies.sql) applies to the
  * verify-fallback path too, even though a customer's own click triggered it.
@@ -36,82 +51,42 @@ export async function confirmPaymentByReference(
 ): Promise<ApplyPaymentResult> {
   const admin = createAdminClient();
 
-  const { data: payment, error: paymentError } = await admin
-    .from("payments")
-    .select("*")
-    .eq("paystack_reference", reference)
-    .maybeSingle();
+  const { data, error } = await admin.rpc("confirm_booking_payment", {
+    p_reference: reference,
+    p_verified_at: new Date().toISOString(),
+    p_raw_payload: rawPayload ?? null,
+  });
 
-  if (paymentError) {
-    return { outcome: "error", message: paymentError.message };
+  if (error) {
+    return { outcome: "error", message: error.message };
   }
 
-  if (!payment) {
-    return { outcome: "not_found" };
+  if (!data) {
+    return { outcome: "error", message: "Payment confirmation returned no result." };
   }
 
-  if (payment.status === "success") {
-    // Idempotency guard — a retried webhook, or the verify-fallback racing
-    // a webhook that already landed, must never double-count this payment.
-    const { data: existingBooking } = await admin
-      .from("bookings")
-      .select("status")
-      .eq("id", payment.booking_id)
-      .maybeSingle();
+  const result = data as ConfirmPaymentRpcResult;
 
-    return {
-      outcome: "already_processed",
-      newStatus: (existingBooking?.status as BookingStatus) ?? "deposited",
-    };
+  if (result.outcome === "not_found") {
+    return result;
   }
 
-  const { error: updatePaymentError } = await admin
-    .from("payments")
-    .update({
-      status: "success",
-      verified_at: new Date().toISOString(),
-      ...(rawPayload ? { raw_webhook_payload: rawPayload } : {}),
-    })
-    .eq("id", payment.id);
-
-  if (updatePaymentError) {
-    return { outcome: "error", message: updatePaymentError.message };
+  if (result.outcome === "error") {
+    return result;
   }
 
-  const { data: booking, error: bookingError } = await admin
-    .from("bookings")
-    .select("*")
-    .eq("id", payment.booking_id)
-    .maybeSingle();
-
-  if (bookingError || !booking) {
-    return { outcome: "error", message: bookingError?.message ?? "Booking not found" };
+  if (result.outcome === "refund_required") {
+    return { outcome: "refund_required", newStatus: result.new_status };
   }
 
-  const newAmountPaidKobo = booking.amount_paid_kobo + payment.amount_kobo;
-
-  let newStatus: BookingStatus;
-  if (newAmountPaidKobo >= booking.total_price_kobo) {
-    newStatus = "paid_in_full";
-  } else if (newAmountPaidKobo >= booking.deposit_amount_kobo) {
-    newStatus = "deposited";
-  } else {
-    newStatus = booking.status;
+  if (result.outcome === "already_processed") {
+    return { outcome: "already_processed", newStatus: result.new_status };
   }
 
-  const { error: updateBookingError } = await admin
-    .from("bookings")
-    .update({ amount_paid_kobo: newAmountPaidKobo, status: newStatus })
-    .eq("id", booking.id);
+  const { booking, new_status: newStatus, previous_status: previousStatus } = result;
+  const newAmountPaidKobo = result.new_amount_paid_kobo;
 
-  if (updateBookingError) {
-    return { outcome: "error", message: updateBookingError.message };
-  }
-
-  // `booking.status` here is still the PRE-update status — the local object
-  // was never mutated, only the DB row was, so this is the correct "what
-  // was it before this payment" check for both branches below. The
-  // newStatus half of wasFirstPayment matters because a successful payment
+  // The newStatus half of wasFirstPayment matters because a successful payment
   // doesn't strictly guarantee a status change (see the newAmountPaidKobo
   // comparison above) — in practice every real payment is exactly the
   // deposit or exactly the balance, so this never actually skips, but it
@@ -128,11 +103,11 @@ export async function confirmPaymentByReference(
   // path sent NO confirmation to the customer at all — she'd have a
   // confirmed, paid booking and no email ever telling her so.
   const wasFirstPayment =
-    (booking.status === "pending_deposit" ||
-      booking.status === "cancelled" ||
-      booking.status === "auto_cancelled") &&
+    (previousStatus === "pending_deposit" ||
+      previousStatus === "cancelled" ||
+      previousStatus === "auto_cancelled") &&
     (newStatus === "deposited" || newStatus === "paid_in_full");
-  const wasBalancePayment = booking.status === "deposited" && newStatus === "paid_in_full";
+  const wasBalancePayment = previousStatus === "deposited" && newStatus === "paid_in_full";
 
   // Notifications, best-effort — never allowed to change the outcome
   // reported to the caller. Owner gets notified only on the first payment

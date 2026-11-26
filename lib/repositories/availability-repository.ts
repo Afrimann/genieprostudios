@@ -137,9 +137,9 @@ export type DateRangeBookingRow = Pick<
 /**
  * Returns every non-addon booking whose session_date falls within
  * [startDate, endDate] (inclusive, ISO "YYYY-MM-DD") — any status; callers
- * that only care about "still occupies time" must filter out
- * cancelled/auto_cancelled (and age out stale pending_deposit rows)
- * themselves, same convention the old getBookingsForSlot used.
+ * that only care about "still occupies time" must retain only
+ * deposited/paid_in_full rows, since unpaid pending_deposit bookings never
+ * reserve a time (0040_no_pending_hold.sql).
  *
  * Callers computing overlap for a single target date should pass
  * [targetDate - 1, targetDate + 1] (or similar) so a booking that starts

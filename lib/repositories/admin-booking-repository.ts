@@ -157,6 +157,7 @@ export type AdminBookingListItem = {
   amountPaidKobo: number;
   status: BookingStatus;
   createdAt: string;
+  refundRequiredPaymentCount: number;
 };
 
 /**
@@ -195,11 +196,21 @@ export async function getAllBookingsForAdmin(): Promise<AdminBookingListItem[]> 
 
   const customerIds = [...new Set(rows.map((r) => r.customer_id))];
   const serviceIds = [...new Set(rows.map((r) => r.service_id))];
+  const bookingIds = rows.map((r) => r.id);
 
-  const [{ data: profiles, error: profilesError }, { data: services, error: servicesError }] =
+  const [
+    { data: profiles, error: profilesError },
+    { data: services, error: servicesError },
+    { data: refundPayments, error: refundPaymentsError },
+  ] =
     await Promise.all([
       supabase.from("profiles").select("id, full_name, email").in("id", customerIds),
       supabase.from("services").select("id, label").in("id", serviceIds),
+      supabase
+        .from("payments")
+        .select("booking_id")
+        .in("booking_id", bookingIds)
+        .eq("status", "refund_required"),
     ]);
 
   if (profilesError) {
@@ -208,9 +219,19 @@ export async function getAllBookingsForAdmin(): Promise<AdminBookingListItem[]> 
   if (servicesError) {
     throw new Error(`getAllBookingsForAdmin: services lookup failed: ${servicesError.message}`);
   }
+  if (refundPaymentsError) {
+    throw new Error(`getAllBookingsForAdmin: refund payment lookup failed: ${refundPaymentsError.message}`);
+  }
 
   const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
   const serviceById = new Map((services ?? []).map((s) => [s.id, s]));
+  const refundCountByBookingId = new Map<string, number>();
+  for (const payment of refundPayments ?? []) {
+    refundCountByBookingId.set(
+      payment.booking_id,
+      (refundCountByBookingId.get(payment.booking_id) ?? 0) + 1,
+    );
+  }
 
   return rows.map((row) => {
     const profile = profileById.get(row.customer_id);
@@ -229,6 +250,7 @@ export async function getAllBookingsForAdmin(): Promise<AdminBookingListItem[]> 
       amountPaidKobo: row.amount_paid_kobo,
       status: row.status,
       createdAt: row.created_at,
+      refundRequiredPaymentCount: refundCountByBookingId.get(row.id) ?? 0,
     };
   });
 }

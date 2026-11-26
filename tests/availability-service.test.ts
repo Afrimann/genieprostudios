@@ -30,6 +30,34 @@ function makeBooking(overrides: Partial<DateRangeBookingRow>): DateRangeBookingR
 }
 
 describe("computeValidStartTimes — previous-day overnight booking", () => {
+  it("keeps a time available when its existing booking is still unpaid", () => {
+    const pendingBooking = makeBooking({
+      session_date: "2026-10-10",
+      session_start_time: "10:00:00",
+      session_end_date: "2026-10-10",
+      session_end_time: "11:00:00",
+      status: "pending_deposit",
+    });
+
+    const options = computeValidStartTimes("2026-10-10", 1, [], [pendingBooking]);
+
+    expect(options.map((option) => option.startTime)).toContain("10:00:00");
+  });
+
+  it("blocks a time once its booking has received a deposit", () => {
+    const depositedBooking = makeBooking({
+      session_date: "2026-10-10",
+      session_start_time: "10:00:00",
+      session_end_date: "2026-10-10",
+      session_end_time: "11:00:00",
+      status: "deposited",
+    });
+
+    const options = computeValidStartTimes("2026-10-10", 1, [], [depositedBooking]);
+
+    expect(options.map((option) => option.startTime)).not.toContain("10:00:00");
+  });
+
   it("excludes an early-morning target-date start time blocked by a booking that started the day before and runs past midnight", () => {
     // Booking on 2026-10-09 22:00 for 4 hours -> ends 2026-10-10 02:00.
     const previousDayOvernightBooking = makeBooking({

@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import {
   LayoutDashboard,
   CalendarClock,
+  CalendarDays,
   AlertTriangle,
   Clapperboard,
   MessageCircle,
@@ -15,6 +17,8 @@ import {
   Radio,
   Mic2,
   Tags,
+  Menu,
+  X,
 } from "lucide-react";
 
 import { signOut } from "@/lib/services/auth-service";
@@ -25,7 +29,8 @@ const NAV_ITEMS = [
   { href: "/admin/availability", label: "Availability", icon: CalendarClock },
   { href: "/admin/equipment", label: "Equipment", icon: Mic2 },
   { href: "/admin/services", label: "Services", icon: Tags },
-  { href: "/admin/bookings", label: "Bookings", icon: AlertTriangle },
+  { href: "/admin/bookings", label: "Bookings", icon: CalendarDays },
+  { href: "/admin/needs-attention", label: "Needs attention", icon: AlertTriangle },
   { href: "/admin/customers", label: "Customers", icon: UserRound },
   { href: "/admin/support", label: "Support", icon: MessageCircle },
   { href: "/admin/portfolio", label: "Portfolio", icon: Clapperboard },
@@ -58,7 +63,7 @@ interface AdminShellProps {
 
 /**
  * Persistent chrome for every /admin/(protected) page — sidebar nav (desktop)
- * / horizontal pill nav (mobile) + sign-out, wrapping whatever page content
+ * / drawer nav (mobile) + sign-out, wrapping whatever page content
  * is rendered. A Client Component purely because usePathname() (active-link
  * highlighting) requires it; the actual auth gate stays entirely in
  * app/admin/(protected)/layout.tsx, this component only renders chrome around
@@ -72,6 +77,7 @@ interface AdminShellProps {
  */
 export function AdminShell({ adminEmail, unresolvedCount, openSupportCount, children }: AdminShellProps) {
   const pathname = usePathname();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   async function handleSignOut() {
     await signOut("/admin/login");
@@ -79,7 +85,19 @@ export function AdminShell({ adminEmail, unresolvedCount, openSupportCount, chil
 
   return (
     <div className="flex h-screen flex-col overflow-hidden md:flex-row">
-      <aside className="bg-grain relative z-10 flex shrink-0 flex-col border-b border-[var(--amber-glow)]/20 bg-card md:h-screen md:w-60 md:border-b-0 md:border-r">
+      {mobileNavOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setMobileNavOpen(false)}
+          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+        />
+      )}
+
+      <aside
+        id="admin-navigation"
+        className={`${mobileNavOpen ? "flex" : "hidden"} bg-grain fixed inset-y-0 left-0 z-40 w-72 shrink-0 flex-col border-r border-[var(--amber-glow)]/20 bg-card shadow-2xl md:relative md:z-10 md:flex md:h-screen md:w-60 md:shadow-none`}
+      >
         <div className="relative z-[1] flex items-center gap-2 border-b border-border px-5 py-5">
           <Radio className="size-5 text-[var(--amber-glow)]" aria-hidden="true" />
           <div className="flex flex-col">
@@ -92,7 +110,7 @@ export function AdminShell({ adminEmail, unresolvedCount, openSupportCount, chil
           </div>
         </div>
 
-        <nav className="scrollbar-hide relative z-[1] flex flex-1 gap-1 overflow-x-auto px-3 py-4 md:flex-col md:overflow-visible">
+        <nav className="scrollbar-hide relative z-[1] flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
           {NAV_ITEMS.map((item) => {
             const isActive =
               item.href === "/admin"
@@ -100,7 +118,7 @@ export function AdminShell({ adminEmail, unresolvedCount, openSupportCount, chil
                 : pathname?.startsWith(item.href);
             const Icon = item.icon;
             const badgeCount =
-              item.href === "/admin/bookings"
+              item.href === "/admin/needs-attention"
                 ? unresolvedCount
                 : item.href === "/admin/support"
                   ? openSupportCount
@@ -111,6 +129,7 @@ export function AdminShell({ adminEmail, unresolvedCount, openSupportCount, chil
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => setMobileNavOpen(false)}
                 className={`group flex shrink-0 items-center gap-3 rounded-lg border-l-2 px-3 py-2.5 text-sm transition-colors ${
                   isActive
                     ? "border-[var(--amber-glow)] bg-[var(--amber-glow)]/10 font-medium text-foreground"
@@ -142,6 +161,7 @@ export function AdminShell({ adminEmail, unresolvedCount, openSupportCount, chil
           <form action={handleSignOut}>
             <button
               type="submit"
+              onClick={() => setMobileNavOpen(false)}
               className="flex items-center gap-2 text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
               <LogOut className="size-3.5" aria-hidden="true" />
@@ -152,7 +172,26 @@ export function AdminShell({ adminEmail, unresolvedCount, openSupportCount, chil
       </aside>
 
       <div className="flex flex-1 flex-col overflow-y-auto bg-background">
-        <header className="sticky top-0 z-[1] flex shrink-0 items-center border-b border-border bg-background/95 px-6 py-4 backdrop-blur-sm sm:px-8">
+        <header className="sticky top-0 z-[1] flex shrink-0 items-center justify-between border-b border-border bg-background/95 px-5 py-3 backdrop-blur-sm md:hidden">
+          <h1 className="font-heading text-lg font-medium text-foreground">
+            {currentPageLabel(pathname)}
+          </h1>
+          <button
+            type="button"
+            aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileNavOpen}
+            aria-controls="admin-navigation"
+            onClick={() => setMobileNavOpen((open) => !open)}
+            className="flex size-10 items-center justify-center rounded-lg border border-border text-foreground transition-colors hover:bg-secondary"
+          >
+            {mobileNavOpen ? (
+              <X className="size-5" aria-hidden="true" />
+            ) : (
+              <Menu className="size-5" aria-hidden="true" />
+            )}
+          </button>
+        </header>
+        <header className="sticky top-0 z-[1] hidden shrink-0 items-center border-b border-border bg-background/95 px-6 py-4 backdrop-blur-sm sm:px-8 md:flex">
           <h1 className="font-heading text-lg font-medium text-foreground">
             {currentPageLabel(pathname)}
           </h1>

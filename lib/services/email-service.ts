@@ -109,11 +109,15 @@ async function sendEmail(params: {
  * single-date format otherwise, unchanged from before this field existed.
  */
 function formatSessionLine(
-  sessionDate: string,
-  sessionStartTime: string,
-  sessionEndTime?: string,
-  sessionEndDate?: string,
+  sessionDate: string | null,
+  sessionStartTime: string | null,
+  sessionEndTime?: string | null,
+  sessionEndDate?: string | null,
 ): string {
+  if (!sessionDate || !sessionStartTime) {
+    return "No studio time — per-song order";
+  }
+
   if (!sessionEndTime) {
     return `${sessionDate}, ${sessionStartTime}`;
   }
@@ -136,10 +140,10 @@ export async function sendOwnerNewBookingEmail(params: {
   customerName: string;
   customerEmail: string;
   serviceLabel: string;
-  sessionDate: string;
-  sessionStartTime: string;
-  sessionEndTime: string;
-  sessionEndDate?: string;
+  sessionDate: string | null;
+  sessionStartTime: string | null;
+  sessionEndTime: string | null;
+  sessionEndDate?: string | null;
   amountPaidKobo: number;
   totalPriceKobo: number;
   status: string;
@@ -162,7 +166,11 @@ export async function sendOwnerNewBookingEmail(params: {
   const bodyHtml =
     eyebrow("New booking", brand) +
     heading("You've got a new booking", brand) +
-    paragraph(`<strong>${escapeHtml(customerName)}</strong> (${escapeHtml(customerEmail)}) has paid for a session.`) +
+    paragraph(
+      `<strong>${escapeHtml(customerName)}</strong> (${escapeHtml(customerEmail)}) has paid for ${
+        sessionDate ? "a studio session." : "a per-song order."
+      }`,
+    ) +
     detailTable([
       { label: "Service", value: serviceLabel },
       { label: "Session", value: formatSessionLine(sessionDate, sessionStartTime, sessionEndTime, sessionEndDate) },
@@ -172,8 +180,13 @@ export async function sendOwnerNewBookingEmail(params: {
 
   return sendEmail({
     to: ownerEmail,
-    subject: `New booking: ${serviceLabel} — ${sessionDate}`,
-    html: renderEmailLayout(brand, { previewText: `${customerName} has paid for a session.`, bodyHtml }),
+    subject: sessionDate
+      ? `New booking: ${serviceLabel} — ${sessionDate}`
+      : `New order: ${serviceLabel}`,
+    html: renderEmailLayout(brand, {
+      previewText: `${customerName} has paid for ${sessionDate ? "a session." : "an order."}`,
+      bodyHtml,
+    }),
   });
 }
 
@@ -189,10 +202,10 @@ export async function sendCustomerBookingConfirmedEmail(params: {
   customerEmail: string;
   customerName: string;
   serviceLabel: string;
-  sessionDate: string;
-  sessionStartTime: string;
-  sessionEndTime: string;
-  sessionEndDate?: string;
+  sessionDate: string | null;
+  sessionStartTime: string | null;
+  sessionEndTime: string | null;
+  sessionEndDate?: string | null;
   amountPaidKobo: number;
   totalPriceKobo: number;
   status: "deposited" | "paid_in_full";
@@ -223,8 +236,8 @@ export async function sendCustomerBookingConfirmedEmail(params: {
     paragraph(`Hi ${escapeHtml(customerName || "there")},`) +
     paragraph(
       isFull
-        ? `Your <strong>${escapeHtml(serviceLabel)}</strong> session is confirmed and paid in full.`
-        : `Your <strong>${escapeHtml(serviceLabel)}</strong> session is confirmed — your deposit has been received.`,
+        ? `Your <strong>${escapeHtml(serviceLabel)}</strong> ${sessionDate ? "session" : "order"} is confirmed and paid in full.`
+        : `Your <strong>${escapeHtml(serviceLabel)}</strong> ${sessionDate ? "session" : "order"} is confirmed — your deposit has been received.`,
     ) +
     detailTable([
       { label: "Service", value: serviceLabel },
@@ -233,15 +246,17 @@ export async function sendCustomerBookingConfirmedEmail(params: {
       ...(isFull ? [] : [{ label: "Balance remaining", value: formatKobo(remainingKobo) }]),
     ]) +
     (isFull
-      ? paragraph("No further payment is needed — we'll see you at your session.")
-      : paragraph("Please settle the remaining balance at least 24 hours before your session to avoid automatic cancellation.")) +
+      ? paragraph(sessionDate ? "No further payment is needed — we'll see you at your session." : "No further payment is needed.")
+      : paragraph(sessionDate
+        ? "Please settle the remaining balance at least 24 hours before your session to avoid automatic cancellation."
+        : "Please settle the remaining balance to complete your order.")) +
     ctaButton(dashboardUrl, "View your booking", brand);
 
   return sendEmail({
     to: customerEmail,
     subject: isFull
-      ? `Booking confirmed — paid in full: ${serviceLabel}`
-      : `Booking confirmed: ${serviceLabel} — ${sessionDate}`,
+      ? `${sessionDate ? "Booking" : "Order"} confirmed — paid in full: ${serviceLabel}`
+      : `${sessionDate ? "Booking" : "Order"} confirmed: ${serviceLabel}${sessionDate ? ` — ${sessionDate}` : ""}`,
     html: renderEmailLayout(brand, {
       previewText: isFull ? "Your booking is confirmed and paid in full." : "Your booking is confirmed.",
       bodyHtml,
@@ -260,10 +275,10 @@ export async function sendCustomerBalancePaidEmail(params: {
   customerEmail: string;
   customerName: string;
   serviceLabel: string;
-  sessionDate: string;
-  sessionStartTime: string;
-  sessionEndTime: string;
-  sessionEndDate?: string;
+  sessionDate: string | null;
+  sessionStartTime: string | null;
+  sessionEndTime: string | null;
+  sessionEndDate?: string | null;
   totalPriceKobo: number;
   siteUrl: string;
 }): Promise<SendEmailResult> {
@@ -286,14 +301,14 @@ export async function sendCustomerBalancePaidEmail(params: {
     heading("You're paid in full", brand) +
     paragraph(`Hi ${escapeHtml(customerName || "there")},`) +
     paragraph(
-      `We've received your remaining balance for <strong>${escapeHtml(serviceLabel)}</strong> — your booking is now paid in full.`,
+      `We've received your remaining balance for <strong>${escapeHtml(serviceLabel)}</strong> — your ${sessionDate ? "booking" : "order"} is now paid in full.`,
     ) +
     detailTable([
       { label: "Service", value: serviceLabel },
       { label: "Session", value: formatSessionLine(sessionDate, sessionStartTime, sessionEndTime, sessionEndDate) },
       { label: "Total paid", value: formatKobo(totalPriceKobo) },
     ]) +
-    paragraph("No further payment is needed — we'll see you at your session.") +
+    paragraph(sessionDate ? "No further payment is needed — we'll see you at your session." : "No further payment is needed.") +
     ctaButton(dashboardUrl, "View your booking", brand);
 
   return sendEmail({

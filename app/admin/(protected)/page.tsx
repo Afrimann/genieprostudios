@@ -147,7 +147,7 @@ async function DashboardStats() {
 
       {stats.unresolvedCount > 0 && (
         <Link
-          href="/admin/bookings"
+          href="/admin/needs-attention"
           className="flex flex-col gap-4 rounded-2xl border border-destructive/40 bg-destructive/10 p-5 transition-colors hover:border-destructive sm:col-span-2 lg:col-span-4"
         >
           <div className="flex items-center justify-between gap-3">
@@ -320,8 +320,8 @@ const QUICK_LINKS = [
     icon: CalendarClock,
   },
   {
-    href: "/admin/bookings",
-    label: "Review bookings",
+    href: "/admin/needs-attention",
+    label: "Needs attention",
     description: "Handle unresolved past-session balances.",
     icon: AlertTriangle,
   },
